@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>CHROMATICA — colour extracted from six centuries of painting</title>
+<meta name="description" content="Every cell is a real colour extracted from a real painting in the Metropolitan Museum of Art, arranged chronologically from 1300 to 1910.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<div id="boot" class="boot">
+  <pre class="boot__log" id="bootLog">CHROMATICA v0.1</pre>
+</div>
+
+<header class="hud hud--top">
+  <div class="hud__brand">
+    <span class="hud__title">CHROMATICA</span>
+    <span class="hud__sub">COLOUR FIELD / MET OPEN ACCESS</span>
+  </div>
+  <dl class="readout" id="readout">
+    <div><dt>WORKS</dt><dd id="statWorks">····</dd></div>
+    <div><dt>CELLS</dt><dd id="statCells">····</dd></div>
+    <div><dt>SPAN</dt><dd id="statSpan">····</dd></div>
+    <div><dt>ZOOM</dt><dd id="statZoom">1.00×</dd></div>
+  </dl>
+</header>
+
+<main class="stage" id="stage">
+  <canvas id="grid"></canvas>
+  <div class="crosshair" id="crosshair" hidden></div>
+  <div class="hoverchip" id="hoverchip" hidden></div>
+</main>
+
+<footer class="hud hud--bottom">
+  <div class="scale" id="scale" aria-hidden="true"></div>
+  <div class="controls">
+    <div class="cursor">
+      <span class="cursor__label">RANGE</span>
+      <span class="cursor__year" id="cursorFrom">····</span>
+      <span class="cursor__dash">→</span>
+      <span class="cursor__year" id="cursorTo">····</span>
+    </div>
+    <label class="filter">
+      <span class="filter__label">SCHOOL</span>
+      <select id="filterNat"><option value="-1">ALL</option></select>
+    </label>
+    <div class="btns">
+      <button id="btnOut" title="Zoom out (−)">−</button>
+      <button id="btnIn" title="Zoom in (+)">+</button>
+      <button id="btnReset" title="Reset view (0)">RESET</button>
+      <button id="btnInfo" title="About">?</button>
+    </div>
+  </div>
+  <div class="density" id="density">
+    <span class="density__label">DATA DENSITY / WORKS PER YEAR / LOG</span>
+    <canvas id="densityCanvas"></canvas>
+  </div>
+</footer>
+
+<div class="panel" id="detail" hidden>
+  <button class="panel__close" id="detailClose" aria-label="Close">×</button>
+  <div class="panel__body">
+    <img id="detailImg" alt="" width="200" height="200">
+    <div class="panel__meta">
+      <div class="panel__swatches" id="detailSwatches"></div>
+      <h2 id="detailTitle"></h2>
+      <p class="panel__artist" id="detailArtist"></p>
+      <dl class="panel__rows">
+        <div><dt>DATED</dt><dd id="detailYear"></dd></div>
+        <div><dt>SCHOOL</dt><dd id="detailNat"></dd></div>
+        <div><dt>OBJECT</dt><dd id="detailId"></dd></div>
+      </dl>
+      <a id="detailLink" href="#" target="_blank" rel="noopener noreferrer">VIEW AT THE MET ↗</a>
+    </div>
+  </div>
+</div>
+
+<div class="panel panel--about" id="about" hidden>
+  <button class="panel__close" id="aboutClose" aria-label="Close">×</button>
+  <div class="about__body">
+    <h2>CHROMATICA</h2>
+    <p>Every cell in this field is a real colour, extracted by k-means clustering
+       from the photograph of a real painting. Nothing here is decorative: no
+       colour has been chosen, corrected, or invented. Click any cell to see the
+       work it came from.</p>
+    <h3>METHOD</h3>
+    <ul id="aboutMethod"></ul>
+    <h3>WHAT THE GAPS MEAN</h3>
+    <p>The horizontal axis is ordinal, not linear. Each column holds roughly the
+       same number of paintings, so a column may span a century where the
+       collection is thin and two years where it is dense. The strip at the
+       bottom reports the real span and count of every column. This is a survey
+       of one museum's public-domain holdings, not of art history.</p>
+    <p>The field stops around 1910. That is a copyright boundary, not an
+       aesthetic one: paintings after it are almost never in the public domain,
+       so the twentieth century cannot be shown honestly here.</p>
+    <h3>SOURCE</h3>
+    <p id="aboutSource"></p>
+    <p>Images and metadata: The Metropolitan Museum of Art Open Access
+       (CC0 1.0). Attribution is provided on every work.</p>
+  </div>
+</div>
+
+<script type="module" src="js/main.js"></script>
+</body>
+</html>

@@ -1,0 +1,13 @@
+# Pipeline working directory: the 317 MB Met CSV and the resumable append logs.
+# Regenerable from scratch with pipeline/00_download_csv.sh + stages 01-04.
+/data/
+
+# Committed on purpose (GitHub Pages serves them directly, and re-deriving them
+# would mean re-downloading ~2,800 images from the Met on every clone):
+#   app/data/chromatica.json
+#   app/thumbs/*.jpg
+
+.venv/
+__pycache__/
+*.pyc
+.DS_Store
