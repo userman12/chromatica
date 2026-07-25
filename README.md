@@ -130,6 +130,24 @@ Images are processed **entirely in memory**: the web-size file is decoded, used
 for both k-means and the thumbnail, then discarded. Nothing full-size is written
 to disk.
 
+### What the run actually produced
+
+| Stage | Result |
+| --- | --- |
+| 01 select | 2,862 candidates from the CSV |
+| 02 image URLs | 2,776 resolved · 6 without an image · 80 failed |
+| 03 palettes | **2,480 usable** · 238 dropped as greyscale · 14 with no stable palette |
+| 04 build | 2,480 paintings · 11,382 colour cells · 39 columns · 1311–1910 · 408 KB |
+
+The 238 greyscale rejections are the single largest loss and they are the right
+loss: they are black-and-white archive photographs of paintings, and their
+"palette" would have been a run of neutrals invented by the reproduction rather
+than by the painter.
+
+At the default fit the grid is 156 × 83 cells and a cell measures 9.2 px, so the
+whole 1311–1910 span reads as one continuous field without the cells falling
+below the size at which they stay individually distinguishable when zoomed.
+
 ## App
 
 `app/` is plain static files — no bundler, no build step, no dependencies. The
