@@ -534,15 +534,35 @@ async function init() {
   boot("> connecting to dataset ...");
   let data;
   try {
-    const response = await fetch("data/chromatica.json", { cache: "force-cache" });
+    // no-cache, not force-cache: revalidate every load. The dataset and this
+    // script are separate files with separate cache lifetimes, so force-cache
+    // let a browser pair a months-old JSON with today's code -- and when the
+    // schema moves under it, that combination is not stale, it is broken.
+    // Revalidating costs one conditional request that answers 304 in the
+    // ordinary case, and the images are the bandwidth here anyway.
+    const response = await fetch("data/chromatica.json", { cache: "no-cache" });
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     data = await response.json();
+    if (!Array.isArray(data?.meta?.sources)) {
+      throw new Error("dataset is older than this build");
+    }
   } catch (error) {
     boot(`! dataset unavailable: ${error.message}`);
-    boot("! the field cannot be composed.");
+    boot("! the field cannot be composed. try a hard reload.");
     return;
   }
 
+  try {
+    await compose(data);   // awaited, or a throw past its first await escapes
+  } catch (error) {
+    // A half-drawn boot screen that never finishes reads as a hang, and a hang
+    // gives no one anything to act on. Say what broke instead.
+    boot(`! ${error.message}`);
+    boot("! the field cannot be composed. try a hard reload.");
+  }
+}
+
+async function compose(data) {
   state.data = data;
   boot(`> ${num(data.meta.totalPaintings)} paintings / `
     + `${num(data.meta.totalCells)} extracted colours`);
