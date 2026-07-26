@@ -1,16 +1,22 @@
 /* CHROMATICA — application shell.
  *
- * The instrument has one surface and two readings of it.
+ * The instrument has one surface and two independent controls over it.
  *
- *  - The default reading is the whole collection at once: 11,728 measured colours
- *    of six centuries standing together in the chromatic plane. That is the
- *    picture, and it is complete without touching anything.
- *  - The timelapse is a mode you switch on. It replaces the flat weight with a
- *    window that moves through time, so the same cloud recomposes century by
- *    century. It is a second reading of the same data, not the way in.
+ *  - LAYOUT is where a colour stands. By default it stands at its year and its
+ *    lightness, so the whole collection is one long chronological band: six
+ *    centuries read left to right, dark below and light above. The other layout
+ *    puts it at its a* and b* coordinate instead, the chromatic plane, where hue
+ *    rather than time is the geography. Both are measurements; the toggle only
+ *    chooses which two of them are the axes, and the field morphs between them.
+ *  - TIMELAPSE is which colours are present. It replaces the flat weight with a
+ *    window that moves through time, so the field thins to one period.
+ *
+ * The two compose: the timelapse in the chronological layout is a lit band walking
+ * across the band; in the chromatic plane it is a cloud recomposing in place.
  *
  * Everything else is the panel it is mounted in: two HUD bars carrying the
- * measurement in cold monospace, and nothing drawn on the field itself.
+ * measurement in cold monospace, and one line under the field naming its axes,
+ * because an axis the viewer cannot name is a decoration.
  */
 import { Field } from "./field.js";
 import { Nebula } from "./nebula.js";
@@ -35,6 +41,7 @@ const el = {
   statWorks: $("statWorks"), statColours: $("statColours"),
   statSpan: $("statSpan"), statWindow: $("statWindow"),
   stage: $("stage"), field: $("field"), hint: $("hint"), hoverchip: $("hoverchip"),
+  axes: $("axes"), btnLayout: $("btnLayout"),
   cursorLabel: $("cursorLabel"), cursorValue: $("cursorValue"),
   cursorRange: $("cursorRange"), cursorSpan: $("cursorSpan"),
   natFilter: $("natFilter"),
@@ -55,6 +62,7 @@ const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").match
 const state = {
   data: null, field: null,
   mode: "all",        // "all" = the whole span at once, "time" = the timelapse
+  chrono: true,       // layout: true = year × lightness, false = the a* and b* plane
   playing: false,
   cursor: 0,          // the timelapse year, kept as a float so play is smooth
   nat: -1,            // school filter, -1 for all
@@ -111,7 +119,7 @@ function frame(now) {
 
   state.field.step({
     year: state.mode === "time" ? state.cursor : null,
-    t, reduceMotion, nat: state.nat,
+    t, reduceMotion, nat: state.nat, chrono: state.chrono,
   });
 
   // The same amount of ink whatever the particle count: the whole span puts about
@@ -234,13 +242,43 @@ function setMode(mode, { year = null, play = null } = {}) {
   el.timelineLabel.textContent = timed
     ? "WORKS PER YEAR · DRAG TO SCRUB"
     : "WORKS PER YEAR · CLICK TO START A TIMELAPSE";
+  paintPlay();
+  paintCopy();
+}
+
+/**
+ * Switch which two measurements are the axes.
+ *
+ * Nothing is recomputed and nothing is refiltered: the same particles walk to new
+ * coordinates under the same easing, so the morph itself shows that it is one set
+ * of colours being read two ways rather than two pictures.
+ */
+function setLayout(chrono) {
+  state.chrono = chrono;
+  state.dirty = true;
+  paintCopy();
+}
+
+/* What the surface currently is, said in words. The field draws no axis lines —
+   a ruler over a measurement is still a drawn thing — so this line carries the
+   whole of it, and it has to change the instant the layout does. */
+function paintCopy() {
+  const timed = state.mode === "time";
+  const F = state.field;
+  el.axes.textContent = state.chrono
+    ? `HORIZONTAL · YEAR, ${F.y0} → ${F.y1}   ·   VERTICAL · LIGHTNESS L*, DARK BELOW`
+    : "HORIZONTAL · a*, GREEN → RED   ·   VERTICAL · b*, BLUE → YELLOW";
+  el.btnLayout.textContent = state.chrono ? "CHROMATIC PLANE" : "CHRONOLOGY";
+  el.btnLayout.title = state.chrono
+    ? "Restack the same colours by hue instead of by year"
+    : "Spread the same colours along the years again";
   el.hint.textContent = timed
     ? "DRAG THE FIELD OR THE STRIP · ← → TO STEP A YEAR"
     : "EVERY PARTICLE IS ONE MEASURED COLOUR OF ONE PAINTING";
-  el.hudSub.textContent = timed
-    ? "CIE L*a*b* CHROMATIC PLANE · MOVING WINDOW IN TIME"
-    : "CIE L*a*b* CHROMATIC PLANE · CLICK A PARTICLE FOR ITS PAINTING";
-  paintPlay();
+  el.hudSub.textContent = (state.chrono
+    ? "YEAR × LIGHTNESS · THE COLLECTION UNROLLED IN TIME"
+    : "CIE L*a*b* CHROMATIC PLANE · PLACED BY HUE")
+    + (timed ? " · MOVING WINDOW IN TIME" : " · CLICK A PARTICLE FOR ITS PAINTING");
 }
 
 function paintPlay() {
@@ -328,10 +366,12 @@ function bindInput() {
     else setMode("time", { year: state.field.y0, play: true });
   });
   el.btnPlay.addEventListener("click", () => setPlaying(!state.playing));
+  el.btnLayout.addEventListener("click", () => setLayout(!state.chrono));
   el.btnReset.addEventListener("click", () => {
     state.nat = -1;
     el.natFilter.value = "-1";
     hideDetail();
+    setLayout(true);
     setMode("all");
   });
   el.natFilter.addEventListener("change", () => {
@@ -486,7 +526,8 @@ async function init() {
 
   state.field = new Field(data);
   state.cursor = state.field.y0;
-  boot(`> ${num(state.field.n)} particles in CIE L*a*b*`);
+  boot(`> ${num(state.field.n)} particles measured in CIE L*a*b*`);
+  boot("> layout: year × lightness");
   boot(`> ${state.field.y0}–${state.field.y1} / whole span`);
 
   el.timeline.setAttribute("aria-valuemin", state.field.y0);
@@ -495,6 +536,7 @@ async function init() {
   fillFilter(data);
   measure();
   bindInput();
+  setLayout(true);
   setMode("all");
 
   // ?y=1600 opens straight into the timelapse at a year, paused: a moment in the

@@ -1,23 +1,29 @@
 /* CHROMATICA — the colour field.
  *
  * Every extracted colour of every painting is one particle. There is no grid, no
- * cell and no sorting: a particle's place in the field is its place in the CIE
- * L*a*b* chromatic plane, so neutrals sit in the middle, saturated colours reach
- * the rim, and hue runs around as angle. Colours that look alike end up near each
- * other because that is what the space means — the regions in the cloud are not
- * drawn, they are the consequence of the measurement.
+ * cell and no sorting: a particle's place is always two measured quantities read
+ * off two axes. Which two is the one thing the viewer chooses.
  *
- * Lightness is deliberately NOT given a third coordinate. Against near-black it is
- * already visible as the particle's own luminance, and inventing an axis for it
- * would put a made-up direction into a picture whose whole claim is that no
- * direction is made up. A dim cloud is a dark century.
+ *  - CHRONO, the default reading. Horizontal is the year the painting is dated to,
+ *    linearly from the first work to the last. Vertical is L*, its lightness: dark
+ *    at the floor, light at the ceiling. Six centuries unrolled side by side, so
+ *    the collection's colour can be read across time in one picture instead of
+ *    being piled into one cloud. The 19th century is a wall and the 14th a few
+ *    sparks — that is what the museum owns, shown rather than evened out.
+ *  - LAB, the second reading. Horizontal is a*, vertical is b*: the CIE L*a*b*
+ *    chromatic plane itself, so neutrals fall in the middle, saturated colours
+ *    reach the rim, and hue runs around as angle. Colours that look alike land
+ *    near each other because that is what the space means. Here lightness gets no
+ *    axis — against near-black it is already visible as the particle's own
+ *    luminance, and a dim cloud is a dark century.
  *
- * Time is a weight, not a position. The default state weights every painting
- * equally: the whole collection at once, six centuries in one field. Turning the
- * timelapse on replaces that flat weight with a Gaussian on the distance from each
- * painting's year to the cursor, and the weight drives opacity, size and how far
- * the particle is pushed out from its exact colour coordinate. That last part is
- * the density mechanism: when many paintings share a region of the plane, the
+ * Neither layout invents a direction: all four axes are measurements. Time is a
+ * weight as well, and in CHRONO it is a weight and a position at once. The default
+ * state weights every painting equally, the whole collection in one frame. Turning
+ * the timelapse on replaces that flat weight with a Gaussian on the distance from
+ * each painting's year to the cursor, and the weight drives opacity, size and how
+ * far the particle is pushed out from its exact coordinate. That last part is the
+ * density mechanism: when many paintings share a region of the field, the
  * particles there cannot all occupy one point, so the region swells and thickens.
  * Area and solidity are the statistic. Nothing is normalised into a bar.
  */
@@ -51,7 +57,12 @@ const hex = (s) => [
    Every number here is a viewing decision, not a measurement, and is kept in one
    place so it can be argued with. */
 
-const CELL_LAB = 6;        // density-histogram cell, in L*a*b* units
+const CELL_LAB = 6;        // density-histogram cell in the Lab layout, in L*a*b* units
+/* The chrono layout needs its own histogram: density has to be counted in the
+   space the particles are actually standing in, or the blobs would swell for
+   crowding that is not there on screen. A cell is a decade by four points of L*. */
+const CELL_YEARS = 10;
+const CELL_LUM = 4;
 const MIN_WEIGHT = 0.035;  // below this a particle is not drawn at all
 const WINDOW_WORKS = 110;  // paintings the temporal window tries to hold (see sigmaAt)
 const SIGMA_MIN = 9;       // years — the tightest the window ever gets
@@ -98,6 +109,7 @@ export class Field {
     this.rad = new Float32Array(n);
 
     let minA = Infinity, maxA = -Infinity, minB = Infinity, maxB = -Infinity;
+    let minL = Infinity, maxL = -Infinity;
     let i = 0;
     for (let pi = 0; pi < paintings.length; pi++) {
       const p = paintings[pi];
@@ -120,11 +132,12 @@ export class Field {
         this.phase[i] = hash01(i * 7 + 3) * Math.PI * 2;
         if (A < minA) minA = A; if (A > maxA) maxA = A;
         if (B < minB) minB = B; if (B > maxB) maxB = B;
+        if (L < minL) minL = L; if (L > maxL) maxL = L;
         i++;
       }
     }
 
-    this.bounds = { minA, maxA, minB, maxB };
+    this.bounds = { minA, maxA, minB, maxB, minL, maxL };
 
     /* Draw order, darkest first.
      *
@@ -159,7 +172,21 @@ export class Field {
     this.perYear = new Int32Array(y1 - y0 + 1);
     for (const p of paintings) this.perYear[p.y - y0]++;
 
+    // The chrono layout's own histogram, over the plane it actually draws in:
+    // decades across, four points of L* up.
+    this.gwT = Math.max(1, Math.ceil((y1 - y0) / CELL_YEARS) + 1);
+    this.ghT = Math.max(1, Math.ceil((maxL - minL) / CELL_LUM) + 1);
+    this.cellT = new Int32Array(n);
+    for (let j = 0; j < n; j++) {
+      const cx = clampInt(Math.floor((this.year[j] - y0) / CELL_YEARS), this.gwT - 1);
+      const cy = clampInt(Math.floor((this.lum[j] - minL) / CELL_LUM), this.ghT - 1);
+      this.cellT[j] = cy * this.gwT + cx;
+    }
+    this.densityT = new Float32Array(this.gwT * this.ghT);
+
     this.view = { ox: 0, oy: 0, scale: 1, short: 1 };
+    this.tview = { sx: 1, sy: 1, ox: 0, oy: 0, maxL: 100 };
+    this.chrono = true;   // the reading the field opens on
     this.placed = false;
     this.stats = { works: 0, colours: 0, from: y0, to: y1, sigma: 0 };
     // Counting distinct works per frame without allocating a Set each frame:
@@ -174,7 +201,7 @@ export class Field {
    * make "close in colour" mean something different horizontally and vertically.
    */
   resize(cssW, cssH) {
-    const { minA, maxA, minB, maxB } = this.bounds;
+    const { minA, maxA, minB, maxB, minL, maxL } = this.bounds;
     const pad = 0.055;   // the blob spread supplies the rest of the margin
     const short = Math.min(cssW, cssH);
     const usable = short * (1 - pad * 2);
@@ -188,12 +215,35 @@ export class Field {
       // flipped to put yellow above blue the way every colour picker does.
       oy: cssH / 2 + ((minB + maxB) / 2) * scale,
     };
+
+    /* The chrono view. Unlike the chromatic plane, the two axes are different
+       units — years and L* — so they get different scales; there is nothing to
+       distort, because no distance across them means anything jointly. Time is
+       linear on purpose, matching the works-per-year strip below the field bar for
+       bar, so the wall the 19th century makes here stands over its own histogram
+       instead of being rescaled into fairness. */
+    const padX = cssW * 0.045, padY = cssH * 0.085;
+    const sx = (cssW - padX * 2) / Math.max(1, this.y1 - this.y0);
+    const sy = (cssH - padY * 2) / Math.max(1, maxL - minL);
+    this.tview = { sx, sy, ox: padX, oy: padY, maxL };
+
     this.cssW = cssW; this.cssH = cssH;
   }
 
-  /** Where a particle's exact colour sits on screen, before any density offset. */
-  baseX(i) { return this.view.ox + this.lx[i] * this.view.scale; }
-  baseY(i) { return this.view.oy - this.ly[i] * this.view.scale; }
+  /** Where a particle sits on screen in the current layout, before any density offset. */
+  baseX(i) {
+    return this.chrono
+      ? this.tview.ox + (this.year[i] - this.y0) * this.tview.sx
+      : this.view.ox + this.lx[i] * this.view.scale;
+  }
+
+  baseY(i) {
+    // Both layouts flip: screen y runs downward, and light belongs above dark for
+    // the same reason yellow belongs above blue.
+    return this.chrono
+      ? this.tview.oy + (this.tview.maxL - this.lum[i]) * this.tview.sy
+      : this.view.oy - this.ly[i] * this.view.scale;
+  }
 
   /**
    * Window width, in years, at a given point on the scrubber.
@@ -225,15 +275,19 @@ export class Field {
    * `year` is the timelapse cursor, or null for the default state: the whole
    * collection at once, every painting weighted the same. `nat` is a school index
    * or -1 for all schools — a filter, so a school shows its own colour tradition
-   * rather than being averaged into everyone else's.
+   * rather than being averaged into everyone else's. `chrono` picks the layout:
+   * true for year × lightness, false for the a* and b* chromatic plane.
    *
    * Returns nothing; positions and weights are read straight off the arrays.
    */
-  step({ year = null, t = 0, reduceMotion = false, nat = -1 }) {
+  step({ year = null, t = 0, reduceMotion = false, nat = -1, chrono = true }) {
     const timed = year !== null;
     const sigma = timed ? this.sigmaAt(year) : 0;
     const inv = timed ? 1 / (2 * sigma * sigma) : 0;
-    const { density, cell, n } = this;
+    this.chrono = chrono;
+    const n = this.n;
+    const density = chrono ? this.densityT : this.density;
+    const cell = chrono ? this.cellT : this.cell;
     density.fill(0);
 
     const stamp = ++this.seenStamp;
@@ -262,7 +316,12 @@ export class Field {
     // "1" is an ordinary cell for this year and the blob is about cell-sized;
     // above that it swells. Share rather than raw count, so scrubbing changes the
     // shape of the cloud instead of inflating it wherever the museum owns more.
-    const cellPx = CELL_LAB * this.view.scale;
+    /* A cell is square in Lab and rectangular in chrono — a decade is not four
+       points of L* — so the blob's reach is measured per axis. It stays round in
+       cell space and becomes an ellipse in pixels, which is the honest way round:
+       the offset means "this much crowding", not "this many pixels". */
+    const cellPxX = chrono ? CELL_YEARS * this.tview.sx : CELL_LAB * this.view.scale;
+    const cellPxY = chrono ? CELL_LUM * this.tview.sy : CELL_LAB * this.view.scale;
     const norm = total > 0 ? occupied / total : 0;
     const drift = reduceMotion ? 0 : DRIFT_PX;
     const ease = reduceMotion || !this.placed ? 1 : EASE;
@@ -280,9 +339,8 @@ export class Field {
       const cells = Math.min(SPREAD_CAP,
         SPREAD_FLOOR + SPREAD_GAIN * Math.sqrt(relative)) * this.jr[i];
       const wobble = drift * Math.sin(t * DRIFT_HZ * Math.PI * 2 + this.phase[i]);
-      const reach = cells * cellPx + wobble;
-      const tx = this.baseX(i) + this.jx[i] * reach;
-      const ty = this.baseY(i) + this.jy[i] * reach;
+      const tx = this.baseX(i) + this.jx[i] * (cells * cellPxX + wobble);
+      const ty = this.baseY(i) + this.jy[i] * (cells * cellPxY + wobble);
 
       const dx = (tx - this.x[i]) * ease, dy = (ty - this.y[i]) * ease;
       this.x[i] += dx;

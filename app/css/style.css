@@ -121,6 +121,15 @@ body { display: flex; flex-direction: column; }
 }
 .stage.is-scrubbing .stage__hint { opacity: 0; }
 
+/* Names the two axes, because nothing is drawn on the field to name them. Set a
+   step brighter than the hint: which measurement is up and which is across is not
+   a footnote, it is the difference between a picture and a decoration. */
+.stage__axes {
+  position: absolute; left: 0; right: 0; top: 10px; margin: 0;
+  text-align: center; font-size: 8px; letter-spacing: .18em; color: #59615c;
+  pointer-events: none;
+}
+
 .hoverchip {
   position: absolute; pointer-events: none; z-index: 15;
   background: #050505f2; border: 1px solid var(--accent);
@@ -163,7 +172,7 @@ select {
 }
 select:focus-visible, button:focus-visible { outline: 1px solid var(--accent); outline-offset: 1px; }
 
-.btns { display: flex; gap: 5px; }
+.btns { display: flex; gap: 5px; flex-wrap: wrap; }
 button {
   background: #111; color: var(--text); border: 1px solid var(--line);
   border-radius: 0; font-family: var(--mono); font-size: 10px;
@@ -270,6 +279,9 @@ button[aria-pressed="true"] {
   :root { --foot-h: 116px; --hud-h: 58px; }
   .readout > div:nth-child(n+3) { display: none; }
   .hud__sub, .stage__hint, .cursor__range { display: none; }
+  /* The axes line stays: with the sub-header gone it is the only thing left that
+     says what the two directions mean. */
+  .stage__axes { letter-spacing: .1em; padding: 0 8px; }
   /* Room for one line of prose, not two. */
   .hud__blurb { font-size: 8px; max-width: 40ch; }
   .hud__blurb span { display: none; }

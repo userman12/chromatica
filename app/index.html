@@ -21,7 +21,7 @@
          they start dragging. Static: it describes the collection, not the mode. -->
     <span class="hud__blurb">
       EVERY COLOUR MEASURED IN 2,555 MET PAINTINGS, 1311&ndash;1910.
-      <span>PLACED BY WHAT THE COLOUR IS, NOT BY WHO PAINTED IT.</span>
+      <span>PLACED BY WHEN IT WAS PAINTED AND HOW LIGHT IT IS.</span>
     </span>
     <span class="hud__sub" id="hudSub">CIE L*a*b* CHROMATIC PLANE · CLICK A PARTICLE FOR ITS PAINTING</span>
   </div>
@@ -47,6 +47,7 @@
 <main class="stage" id="stage">
   <canvas id="field"></canvas>
   <div class="hoverchip" id="hoverchip" hidden></div>
+  <p class="stage__axes" id="axes">HORIZONTAL · YEAR   ·   VERTICAL · LIGHTNESS L*, DARK BELOW</p>
   <p class="stage__hint" id="hint">EVERY PARTICLE IS ONE MEASURED COLOUR OF ONE PAINTING</p>
 </main>
 
@@ -66,6 +67,7 @@
     </div>
 
     <div class="btns">
+      <button id="btnLayout" title="Restack the same colours by hue instead of by year">CHROMATIC PLANE</button>
       <button id="btnTimelapse" aria-pressed="false" title="Move a window through time instead of showing the whole span">TIMELAPSE</button>
       <button id="btnPlay" hidden title="Play or pause the timelapse">❚❚</button>
       <button id="btnReset" title="Back to the whole collection">RESET</button>
@@ -113,21 +115,31 @@
       only colour against black.</p>
 
     <h3>WHY A COLOUR SITS WHERE IT SITS</h3>
-    <p>Position is the CIE L*a*b* chromatic plane itself: a* runs left to right,
-      b* runs bottom to top. Neutrals fall in the middle, saturated colours reach
-      the rim, hue runs around as angle. Colours that look alike land near each
-      other because that is what the space means. The regions in the cloud are not
-      drawn — they are what the measurement does on its own.</p>
-    <p>Lightness is given no axis on purpose. Against near-black it is already
-      visible as the particle's own brightness, and inventing a direction for it
-      would put a made-up axis into a picture whose whole claim is that no axis is
-      made up. A dim cloud is a dark century.</p>
+    <p>Two axes, and both of them are measurements. Which two is the one thing you
+      choose, and the field morphs between them rather than redrawing, because it
+      is the same colours being read a second way.</p>
+    <p><b>Chronology</b>, the view it opens on. Left to right is the year the
+      painting is dated to, linearly from the first work to the last. Bottom to top
+      is L*, its lightness. So the collection is unrolled in time: you can follow a
+      colour arriving, spreading and thinning across six centuries instead of
+      seeing it piled into a single cloud. The 19th century stands as a wall and
+      the 14th as a few sparks — that is what this museum owns, shown rather than
+      evened out into fairness. The strip below the field is the same year axis, so
+      the wall stands over its own histogram.</p>
+    <p><b>Chromatic plane</b>, the second view. Left to right is a*, bottom to top
+      is b*: the CIE L*a*b* plane itself. Neutrals fall in the middle, saturated
+      colours reach the rim, hue runs around as angle. Colours that look alike land
+      near each other because that is what the space means, and the regions in the
+      cloud are not drawn — they are what the measurement does on its own. Here
+      lightness is given no axis: against near-black it is already visible as the
+      particle's own brightness, and a dim cloud is a dark century.</p>
 
     <h3>DENSITY</h3>
-    <p>A particle is pushed out from its exact colour coordinate in proportion to
-      how much of the shown collection's measured colour falls in that part of the
-      plane. So a heavily used region swells and thickens, and a rare one stays a
-      few sparks. Area and solidity are the statistic; it is share within what is
+    <p>A particle is pushed out from its exact coordinate in proportion to how much
+      of the shown collection's measured colour falls in that part of the field —
+      counted in whichever of the two views is on screen, since crowding is only
+      real where the particles are actually standing. So a heavily used region
+      swells and thickens, and a rare one stays a few sparks. Area and solidity are the statistic; it is share within what is
       shown, not raw count, so changing what is shown changes the shape of the
       cloud instead of merely inflating it wherever the museum owns more paintings.
       Particle size follows the cluster's share of its own painting, largest
