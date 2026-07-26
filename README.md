@@ -135,16 +135,20 @@ to disk.
 | Stage | Result |
 | --- | --- |
 | 01 select | 2,862 candidates from the CSV |
-| 02 image URLs | 2,776 resolved · 6 without an image · 80 failed |
-| 03 palettes | **2,480 usable** · 238 dropped as greyscale · 14 with no stable palette |
-| 04 build | 2,480 paintings · 11,382 colour cells · 39 columns · 1311–1910 · 408 KB |
+| 02 image URLs | 2,856 resolved · 6 without an image · 0 failed |
+| 03 palettes | **2,555 usable** · 243 dropped as greyscale · 14 with no stable palette |
+| 04 build | 2,555 paintings · 11,728 colour cells · 40 columns · 1311–1910 · 420 KB |
 
-The 238 greyscale rejections are the single largest loss and they are the right
+Stage 02 lost 80 works to rate-limit failures on its first pass; re-running the
+script recovered all 80 at the same 4.2 req/s. That is what the append-and-skip
+design is for — those failures were transient, not structural.
+
+The 243 greyscale rejections are the single largest loss and they are the right
 loss: they are black-and-white archive photographs of paintings, and their
 "palette" would have been a run of neutrals invented by the reproduction rather
 than by the painter.
 
-At the default fit the grid is 156 × 83 cells and a cell measures 9.2 px, so the
+At the default fit the grid is 160 × 86 cells and a cell measures 8.8 px, so the
 whole 1311–1910 span reads as one continuous field without the cells falling
 below the size at which they stay individually distinguishable when zoomed.
 
