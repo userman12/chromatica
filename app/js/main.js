@@ -1,37 +1,38 @@
-/* CHROMATICA — application shell: data load, tape state, input, HUD.
+/* CHROMATICA — application shell: data load, page state, input, HUD.
  *
- * The view is two numbers: which column of the tape sits at the crown of the
- * drum, and how many pixels a cell measures there. There is no vertical pan — the
- * ribbon always fits the stage vertically, so scrolling is one axis and one axis
- * only, and that axis is time.
+ * The view is one number: how far down the page you have read. There is no zoom
+ * and no horizontal pan, because there is no second axis to explore — reading
+ * order is time, so moving through the collection is moving down the page, and
+ * that is the whole navigation model.
+ *
+ * Everything else here exists to answer "which painting is this?" as directly as
+ * possible: a chip while pointing, a technical sheet on click, arrow keys to step
+ * word by word, and a linear works-per-year strip at the foot to jump by year.
  */
 import {
-  buildLayout, projection, hitTest, visibleBins, visibleCols,
-  worldAtScreenX, scaleBounds,
+  buildLayout, hitTest, visibleRows, maxScroll, rowYear,
 } from "./layout.js";
 import { Renderer } from "./renderer.js";
 
 const MET_URL = "https://www.metmuseum.org/art/collection/search/";
-const ZOOM_STEP = 1.35;
-const WHEEL_GAIN = 1.5;        // cells travelled per cell-width of wheel delta
-const FRICTION = 0.92;         // tape coasts to a stop after the hand lets go
-const VEL_MIN = 0.015;
+const WHEEL_GAIN = 1;          // page scroll: the wheel means what it says
+const FRICTION = 0.9;
+const VEL_MIN = 0.4;           // px/frame
 const CLICK_SLOP = 4;          // px of movement still counted as a click
 
 const $ = (id) => document.getElementById(id);
 const el = {
   boot: $("boot"), bootLog: $("bootLog"),
-  stage: $("stage"), grid: $("grid"),
-  crosshair: $("crosshair"), hoverchip: $("hoverchip"),
+  stage: $("stage"), grid: $("grid"), hoverchip: $("hoverchip"),
   statWorks: $("statWorks"), statCells: $("statCells"),
-  statSpan: $("statSpan"), statZoom: $("statZoom"),
-  crownYear: $("crownYear"), cursorFrom: $("cursorFrom"), cursorTo: $("cursorTo"),
+  statSpan: $("statSpan"), statCell: $("statCell"),
+  atYear: $("atYear"), cursorFrom: $("cursorFrom"), cursorTo: $("cursorTo"),
   filterNat: $("filterNat"), timeline: $("timelineCanvas"),
-  btnOut: $("btnOut"), btnIn: $("btnIn"), btnReset: $("btnReset"), btnInfo: $("btnInfo"),
+  btnTop: $("btnTop"), btnReset: $("btnReset"), btnInfo: $("btnInfo"),
   detail: $("detail"), detailClose: $("detailClose"), detailImg: $("detailImg"),
   detailTitle: $("detailTitle"), detailArtist: $("detailArtist"),
   detailYear: $("detailYear"), detailNat: $("detailNat"), detailId: $("detailId"),
-  detailColumn: $("detailColumn"), detailPalette: $("detailPalette"),
+  detailCentury: $("detailCentury"), detailPalette: $("detailPalette"),
   detailSwatches: $("detailSwatches"), detailLink: $("detailLink"),
   about: $("about"), aboutClose: $("aboutClose"),
   aboutMethod: $("aboutMethod"), aboutSource: $("aboutSource"),
@@ -39,14 +40,14 @@ const el = {
 
 const state = {
   data: null, layout: null,
-  view: { center: 0, scale: 14 },
+  scrollY: 0,
   cssW: 0, cssH: 0,
-  bounds: { min: 8, max: 30 },
   selected: -1,
   matches: null,          // Uint8Array over paintings, or null when unfiltered
   hovered: -1,
 };
 const renderer = new Renderer(el.grid);
+let yearCounts = null;    // works per year across the whole span, for the foot strip
 
 /* ---------- boot ---------- */
 const bootLines = ["CHROMATICA v0.1"];
@@ -60,11 +61,6 @@ const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
 const num = (n) => n.toLocaleString("en-US");
 const span = (s, e) => (s === e ? String(s) : `${s}–${e}`);
 
-/** The projection in CSS pixels — what pointer coordinates live in. */
-function proj() {
-  return projection(state.layout, state.view, state.cssW, state.cssH);
-}
-
 /* ---------- view maintenance ---------- */
 function measure() {
   const rect = el.stage.getBoundingClientRect();
@@ -74,32 +70,47 @@ function measure() {
 }
 
 function relayout() {
-  const before = state.layout ? state.view.center / state.layout.worldW : 0.5;
+  // Hold your place across a resize. The cell size and the line width both change,
+  // so the row you were on is not the row you will be on — the year is the thing
+  // worth preserving, because the year is what the page is about.
+  const year = state.layout ? rowYear(state.layout, state.data, topRow()) : null;
   state.layout = buildLayout(state.data, state.cssW, state.cssH);
-  state.bounds = scaleBounds(state.layout, state.cssH);
-  state.view.scale = clamp(state.layout.cellCenter, state.bounds.min, state.bounds.max);
-  state.view.center = before * state.layout.worldW;
-  clampView();
+  if (year !== null) scrollToYear(year, false);
+  clampScroll();
 }
 
-function clampView() {
-  const v = state.view;
-  v.scale = clamp(v.scale, state.bounds.min, state.bounds.max);
-  // Both ends may be brought to the crown, so every work is reachable; past them
-  // the tape simply is not there any more, and the axis says so.
-  v.center = clamp(v.center, 0, state.layout.worldW - 1);
+const topRow = () =>
+  clamp(Math.round((state.scrollY - state.layout.padTop) / state.layout.pitch),
+    0, state.layout.rows - 1);
+
+function clampScroll() {
+  state.scrollY = clamp(Math.round(state.scrollY), 0, maxScroll(state.layout, state.cssH));
 }
 
-function zoomAt(factor, anchorX) {
-  const v = state.view;
-  const anchor = worldAtScreenX(proj(), anchorX);
-  const before = v.scale;
-  v.scale = clamp(v.scale * factor, state.bounds.min, state.bounds.max);
-  // Keep the column under the cursor where it is: the arc scales with 1/scale, so
-  // the offset from the crown scales with it too.
-  v.center = anchor - (anchor - v.center) * (before / v.scale);
-  clampView();
-  render();
+/** Put the first line that reaches `year` at the top of the stage. */
+function scrollToYear(year, redraw = true) {
+  const L = state.layout;
+  let target = 0;
+  for (let row = 0; row < L.rows; row++) {
+    const y = rowYear(L, state.data, row);
+    if (y !== null && y >= year) { target = row; break; }
+    target = row;
+  }
+  state.scrollY = L.padTop + target * L.pitch - L.padTop;
+  clampScroll();
+  if (redraw) render();
+}
+
+/** Bring a painting fully into view without moving the page when it already is. */
+function revealPainting(index) {
+  const L = state.layout;
+  const row = L.paintingRow[index];
+  const top = L.padTop + row * L.pitch;
+  if (top < state.scrollY + L.pitch) state.scrollY = top - L.pitch;
+  else if (top + L.cell > state.scrollY + state.cssH - L.pitch) {
+    state.scrollY = top + L.cell + L.pitch - state.cssH;
+  }
+  clampScroll();
 }
 
 /* ---------- render + HUD ---------- */
@@ -110,46 +121,38 @@ function render(withScan) {
 
 function updateHud() {
   const L = state.layout;
-  const p = proj();
-  const [b0, b1] = visibleBins(L, p);
-  const bins = state.data.bins;
+  const [r0, r1] = visibleRows(L, state.cssH, state.scrollY);
+  const p0 = L.rowStart[r0];
+  const p1 = L.rowStart[Math.min(r1 + 1, L.rows + 1)];
+  const paintings = state.data.paintings;
 
   let works = 0, cells = 0;
-  for (let b = b0; b <= b1; b++) {
-    const bin = bins[b];
-    if (state.matches) {
-      for (let pi = bin.p0; pi < bin.p1; pi++) {
-        if (state.matches[pi] === 1) {
-          works++;
-          cells += state.data.paintings[pi].k.length;
-        }
-      }
-    } else {
-      works += bin.n;
-      cells += L.binCellCount[b];
-    }
+  for (let pi = p0; pi < p1; pi++) {
+    if (state.matches && state.matches[pi] !== 1) continue;
+    works++;
+    cells += paintings[pi].k.length;
   }
 
-  const crown = bins[L.colBin[clamp(Math.round(p.center), 0, L.worldW - 1)]];
-  const from = bins[b0].s;
-  const to = bins[b1].e;
+  const from = p0 < paintings.length ? paintings[p0].y : paintings[paintings.length - 1].y;
+  const to = paintings[Math.max(p0, Math.min(p1, paintings.length) - 1)].y;
   el.statWorks.textContent = num(works);
   el.statCells.textContent = num(cells);
   el.statSpan.textContent = `${to - from + 1}y`;
-  el.statZoom.textContent = (state.view.scale / state.layout.cellCenter).toFixed(2) + "×";
-  el.crownYear.textContent = crown.s;
+  el.statCell.textContent = `${L.cell}px`;
+  el.atYear.textContent = from;
   el.cursorFrom.textContent = from;
   el.cursorTo.textContent = to;
 
-  drawTimeline(b0, b1);
+  drawTimeline(from, to);
 }
 
 /**
- * The tape overview. Because the drum only ever shows about a fifth of the tape,
- * this strip is the only place the whole span is visible at once — so it carries
- * both the density of the collection and a window showing where you are.
+ * The foot strip: works per year, on a LINEAR year axis, across the whole span.
+ * The page itself is ordinal — a line covers one year in the 1870s and thirty in
+ * the 1350s — so this is the one place the real shape of the collection is visible,
+ * and it doubles as the way to jump to a year.
  */
-function drawTimeline(b0, b1) {
+function drawTimeline(from, to) {
   const canvas = el.timeline;
   const dpr = Math.min(window.devicePixelRatio || 1, 2);
   const w = Math.max(1, Math.round(canvas.clientWidth * dpr));
@@ -158,44 +161,36 @@ function drawTimeline(b0, b1) {
   const ctx = canvas.getContext("2d");
   ctx.clearRect(0, 0, w, h);
 
-  const bins = state.data.bins;
-  // Works per YEAR, not per bin: bins hold ~equal counts by construction, so only
-  // the rate exposes how uneven the collection actually is over time.
+  const [y0, y1] = state.data.meta.yearRange;
+  const xOf = (year) => ((year - y0) / (y1 - y0 + 1)) * w;
+  const barW = Math.max(1, w / (y1 - y0 + 1));
+
+  // Log scale: the 1870s carry ~60x the works of the 1350s, and on a linear scale
+  // every thin decade would read as empty rather than as thin.
   let peak = 0;
-  const rate = bins.map((bin) => {
-    const r = bin.n / (bin.e - bin.s + 1);
-    if (r > peak) peak = r;
-    return r;
-  });
+  for (const c of yearCounts) if (c > peak) peak = c;
 
-  const L = state.layout;
-  const xOf = (col) => (col / L.worldW) * w;
-
-  for (let b = 0; b < bins.length; b++) {
-    const norm = Math.log1p(rate[b]) / Math.log1p(peak);   // spans ~2 orders of magnitude
-    const barH = Math.max(1, Math.round(norm * (h - 1)));
-    const x0 = Math.round(xOf(L.binCol0[b]));
-    const x1 = Math.round(xOf(L.binCol0[b + 1]));
-    ctx.fillStyle = b >= b0 && b <= b1 ? "#00ff9d" : "#2a2f2c";
-    ctx.fillRect(x0, h - barH, Math.max(1, x1 - x0 - (x1 - x0 > 3 ? 1 : 0)), barH);
+  for (let year = y0; year <= y1; year++) {
+    const c = yearCounts[year - y0];
+    if (!c) continue;
+    const barH = Math.max(1, Math.round((Math.log1p(c) / Math.log1p(peak)) * (h - 1)));
+    ctx.fillStyle = year >= from && year <= to ? "#00ff9d" : "#2a2f2c";
+    ctx.fillRect(Math.floor(xOf(year)), h - barH, Math.ceil(barW), barH);
   }
 
-  // The slice of tape currently on the drum, plus the crown itself.
-  const [c0, c1] = visibleCols(L, proj());
+  // Where you are reading, as a window on the real timeline.
   ctx.strokeStyle = "#00ff9d";
-  ctx.globalAlpha = 0.55;
+  ctx.globalAlpha = 0.5;
   ctx.lineWidth = Math.max(1, dpr);
-  ctx.strokeRect(Math.round(xOf(c0)) + 0.5, 0.5,
-                 Math.max(2, Math.round(xOf(c1) - xOf(c0))), h - 1);
+  ctx.strokeRect(Math.floor(xOf(from)) + 0.5, 0.5,
+    Math.max(2, Math.ceil(xOf(to + 1) - xOf(from))), h - 1);
   ctx.globalAlpha = 1;
-  ctx.fillStyle = "#00ff9d";
-  ctx.fillRect(Math.round(xOf(state.view.center)), 0, Math.max(1, dpr), h);
 }
 
 /* ---------- panels ---------- */
 function showDetail(index) {
   const p = state.data.paintings[index];
-  const bin = state.data.bins[p.b];
+  const century = state.layout.paras.find((q) => index >= q.p0 && index <= q.p1);
   state.selected = index;
   el.detailImg.src = `thumbs/${p.i}.jpg`;
   el.detailImg.alt = p.t || "Untitled";
@@ -204,7 +199,9 @@ function showDetail(index) {
   el.detailYear.textContent = span(p.s, p.e);
   el.detailNat.textContent = state.data.meta.nationalities[p.n] || "—";
   el.detailId.textContent = p.i;
-  el.detailColumn.textContent = `${span(bin.s, bin.e)} · ${bin.n} works`;
+  el.detailCentury.textContent = century
+    ? `${century.century}s · ${num(century.works)} works`
+    : "—";
   // k-means runs with k=5; clusters under 4% of pixels are dropped, so a shorter
   // palette is a real statement about the painting, not a failure.
   el.detailPalette.textContent = p.k.length === 5
@@ -249,10 +246,10 @@ let coasting = null;
 
 function coast() {
   if (Math.abs(velocity) < VEL_MIN) { coasting = null; velocity = 0; render(); return; }
-  state.view.center += velocity;
-  const before = state.view.center;
-  clampView();
-  if (state.view.center !== before) velocity = 0;      // hit an end: stop dead
+  state.scrollY += velocity;
+  const before = state.scrollY;
+  clampScroll();
+  if (state.scrollY !== before) velocity = 0;      // hit an end: stop dead
   velocity *= FRICTION;
   render();
   coasting = requestAnimationFrame(coast);
@@ -264,25 +261,25 @@ function stopCoast() {
   velocity = 0;
 }
 
+function hover(x, y) {
+  const hit = hitTest(state.layout, x, y, state.scrollY);
+  const painting = hit >= 0 ? state.layout.cellPainting[hit] : -1;
+  if (painting !== state.hovered) {
+    state.hovered = painting;
+    updateHoverChip(painting, x, y);
+    renderer.draw(state);            // the frame and the ruler are part of the frame
+  } else if (painting >= 0) {
+    placeHoverChip(x, y);
+  }
+}
+
 function bindInput() {
   el.stage.addEventListener("wheel", (event) => {
     event.preventDefault();
     stopCoast();
-    if (event.ctrlKey || event.metaKey) {          // pinch, or ctrl+wheel
-      // The whole zoom range is only about 2.1x, and one mouse notch reports a
-      // delta of 100 — uncapped that is the entire range in a single click. A
-      // trackpad pinch reports single digits, so this cap only bites on wheels.
-      const [x] = stagePoint(event);
-      const d = Math.max(-30, Math.min(30, event.deltaY));
-      zoomAt(Math.pow(0.99, d), x);
-      return;
-    }
-    // Either wheel axis drives the tape. Vertical wheels are what most people
-    // have, and there is only one axis to move.
-    const delta = Math.abs(event.deltaX) > Math.abs(event.deltaY)
-      ? event.deltaX : event.deltaY;
-    state.view.center += (delta / state.view.scale) * WHEEL_GAIN;
-    clampView();
+    state.scrollY += (Math.abs(event.deltaY) > Math.abs(event.deltaX)
+      ? event.deltaY : event.deltaX) * WHEEL_GAIN;
+    clampScroll();
     render();
   }, { passive: false });
 
@@ -290,33 +287,23 @@ function bindInput() {
   el.stage.addEventListener("pointerdown", (event) => {
     el.stage.setPointerCapture(event.pointerId);
     stopCoast();
-    dragging = { x: event.clientX, moved: 0, center: state.view.center, last: state.view.center };
+    dragging = { y: event.clientY, moved: 0, from: state.scrollY, last: state.scrollY };
     el.stage.classList.add("is-grabbing");
   });
 
   el.stage.addEventListener("pointermove", (event) => {
     const [x, y] = stagePoint(event);
     if (dragging) {
-      const dx = event.clientX - dragging.x;
-      dragging.moved = Math.max(dragging.moved, Math.abs(dx));
-      // Drag left, tape travels forward in time — the surface follows the hand.
-      state.view.center = dragging.center - dx / state.view.scale;
-      clampView();
-      velocity = state.view.center - dragging.last;
-      dragging.last = state.view.center;
+      const dy = event.clientY - dragging.y;
+      dragging.moved = Math.max(dragging.moved, Math.abs(dy));
+      state.scrollY = dragging.from - dy;          // the page follows the hand
+      clampScroll();
+      velocity = state.scrollY - dragging.last;
+      dragging.last = state.scrollY;
       render();
       return;
     }
-    el.crosshair.hidden = false;
-    el.crosshair.style.left = Math.round(x) + "px";
-    const hit = hitTest(state.layout, proj(), x, y);
-    if (hit !== state.hovered) {
-      state.hovered = hit;
-      updateHoverChip(hit, x, y);
-      renderer.draw(state);            // the lift is part of the frame
-    } else if (hit >= 0) {
-      placeHoverChip(x, y);
-    }
+    hover(x, y);
   });
 
   const endDrag = (event) => {
@@ -326,8 +313,8 @@ function bindInput() {
     el.stage.classList.remove("is-grabbing");
     if (wasClick) {
       const [x, y] = stagePoint(event);
-      const hit = hitTest(state.layout, proj(), x, y);
-      if (hit >= 0) showDetail(hit); else hideDetail();
+      const hit = hitTest(state.layout, x, y, state.scrollY);
+      if (hit >= 0) showDetail(state.layout.cellPainting[hit]); else hideDetail();
       return;
     }
     if (Math.abs(velocity) >= VEL_MIN) coasting = requestAnimationFrame(coast);
@@ -339,29 +326,30 @@ function bindInput() {
   });
 
   el.stage.addEventListener("pointerleave", () => {
-    el.crosshair.hidden = true;
     el.hoverchip.hidden = true;
     if (state.hovered >= 0) { state.hovered = -1; renderer.draw(state); }
   });
 
-  const scrub = (event) => {
+  const jump = (event) => {
     const rect = el.timeline.getBoundingClientRect();
-    const fraction = clamp((event.clientX - rect.left) / rect.width, 0, 1);
+    const [y0, y1] = state.data.meta.yearRange;
+    const f = clamp((event.clientX - rect.left) / rect.width, 0, 1);
     stopCoast();
-    state.view.center = fraction * state.layout.worldW;
-    clampView();
-    render();
+    scrollToYear(Math.round(y0 + f * (y1 - y0)));
   };
   el.timeline.addEventListener("pointerdown", (event) => {
     el.timeline.setPointerCapture(event.pointerId);
-    scrub(event);
+    jump(event);
   });
   el.timeline.addEventListener("pointermove", (event) => {
-    if (event.buttons === 1) scrub(event);
+    if (event.buttons === 1) jump(event);
   });
 
-  el.btnIn.addEventListener("click", () => zoomAt(ZOOM_STEP, state.cssW / 2));
-  el.btnOut.addEventListener("click", () => zoomAt(1 / ZOOM_STEP, state.cssW / 2));
+  el.btnTop.addEventListener("click", () => {
+    stopCoast();
+    state.scrollY = 0;
+    render(true);
+  });
   el.btnReset.addEventListener("click", resetView);
   el.btnInfo.addEventListener("click", () => { el.about.hidden = false; });
   el.aboutClose.addEventListener("click", () => { el.about.hidden = true; });
@@ -369,15 +357,28 @@ function bindInput() {
   el.filterNat.addEventListener("change", (event) => applyFilter(Number(event.target.value)));
 
   window.addEventListener("keydown", (event) => {
-    if (event.key === "+" || event.key === "=") zoomAt(ZOOM_STEP, state.cssW / 2);
-    else if (event.key === "-" || event.key === "_") zoomAt(1 / ZOOM_STEP, state.cssW / 2);
-    else if (event.key === "0") resetView();
-    else if (event.key === "Escape") { hideDetail(); el.about.hidden = true; }
-    else if (event.key === "ArrowRight" || event.key === "ArrowLeft") {
+    const L = state.layout;
+    const page = Math.max(L.pitch, state.cssH - L.pitch * 2);
+    if (event.key === "Escape") { hideDetail(); el.about.hidden = true; return; }
+    if (event.key === "ArrowRight" || event.key === "ArrowLeft") {
       event.preventDefault();
-      stopCoast();
-      stepBin(event.key === "ArrowRight" ? 1 : -1);
+      stepWork(event.key === "ArrowRight" ? 1 : -1);
+      return;
     }
+    let dy = 0;
+    if (event.key === "ArrowDown") dy = L.pitch;
+    else if (event.key === "ArrowUp") dy = -L.pitch;
+    else if (event.key === "PageDown" || event.key === " ") dy = page;
+    else if (event.key === "PageUp") dy = -page;
+    else if (event.key === "Home") dy = -Infinity;
+    else if (event.key === "End") dy = Infinity;
+    else return;
+    event.preventDefault();
+    stopCoast();
+    state.scrollY = dy === Infinity ? maxScroll(L, state.cssH)
+      : dy === -Infinity ? 0 : state.scrollY + dy;
+    clampScroll();
+    render();
   });
 
   let resizeTimer;
@@ -387,22 +388,24 @@ function bindInput() {
   });
 }
 
-/** Arrow keys move a whole column of time, so the axis is walkable exactly. */
-function stepBin(dir) {
-  const L = state.layout;
-  const here = L.colBin[clamp(Math.round(state.view.center), 0, L.worldW - 1)];
-  const target = clamp(here + dir, 0, state.data.bins.length - 1);
-  state.view.center = (L.binCol0[target] + L.binCol0[target + 1]) / 2;
-  clampView();
-  render();
+/** Arrow keys walk the collection one work at a time, in chronological order. */
+function stepWork(dir) {
+  const n = state.data.paintings.length;
+  const next = state.selected < 0
+    ? (dir > 0 ? state.layout.rowStart[topRow()] : n - 1)
+    : clamp(state.selected + dir, 0, n - 1);
+  stopCoast();
+  revealPainting(next);
+  showDetail(next);
 }
 
 function resetView() {
   hideDetail();
   stopCoast();
-  state.view.scale = state.layout.cellCenter;
-  state.view.center = state.layout.worldW / 2;
-  clampView();
+  state.scrollY = 0;
+  state.hovered = -1;
+  el.hoverchip.hidden = true;
+  if (state.matches) { el.filterNat.value = "-1"; state.matches = null; }
   render(true);
 }
 
@@ -435,7 +438,7 @@ function fillAbout(meta) {
     .map((note) => `<li>${escapeHtml(note)}</li>`).join("");
   el.aboutSource.textContent =
     `${num(meta.totalPaintings)} paintings, ${num(meta.totalCells)} extracted colours, `
-    + `${meta.bins} columns spanning ${meta.yearRange[0]}–${meta.yearRange[1]}. `
+    + `${meta.yearRange[0]}–${meta.yearRange[1]}. `
     + `Built from the Met Open Access dataset snapshot of ${meta.sourceCsvSnapshot}.`;
 }
 
@@ -460,27 +463,30 @@ async function init() {
     data = await response.json();
   } catch (error) {
     boot(`! dataset unavailable: ${error.message}`);
-    boot("! the colour field cannot be rendered.");
+    boot("! the page cannot be set.");
     return;
   }
 
   state.data = data;
+  const [y0, y1] = data.meta.yearRange;
+  yearCounts = new Int32Array(y1 - y0 + 1);
+  for (const p of data.paintings) yearCounts[p.y - y0]++;
+
   boot(`> ${num(data.meta.totalPaintings)} paintings / `
     + `${num(data.meta.totalCells)} extracted colours`);
-  boot(`> ${data.meta.bins} columns / ${data.meta.yearRange[0]}–${data.meta.yearRange[1]}`);
+  boot(`> ${y0}–${y1} / ${data.meta.nationalities.length} schools`);
 
   fillFilter(data.meta.nationalities);
   fillAbout(data.meta);
   measure();
   relayout();
-  state.view.center = state.layout.worldW / 2;
-  boot(`> tape ${state.layout.worldW}×${state.layout.rows} cells / mounting drum`);
+  boot(`> setting ${state.layout.rows} lines at ${state.layout.cell}px`);
   boot("> scanning ...");
 
   bindInput();
   updateHud();
 
-  // one deliberate beat on the boot readout, then the field scans itself in
+  // one deliberate beat on the boot readout, then the page scans itself in
   await new Promise((resolve) => setTimeout(resolve, 420));
   el.boot.classList.add("boot--done");
   renderer.scan(state);

@@ -4,7 +4,7 @@
 
 Six centuries of painting, reduced to the colours they are actually made of.
 
-Every cell on the tape is a real colour, extracted by k-means clustering from
+Every cell on the page is a real colour, extracted by k-means clustering from
 the photograph of one real painting in the Metropolitan Museum of Art's public
 domain collection. Nothing is decorative: no colour was chosen, corrected or
 invented, and every cell is clickable back to the work it came from.
@@ -52,15 +52,18 @@ land inside the requested 2,000–3,000 sample, so nothing is sampled away.
 | 1800s | 1,211 |
 | 1900s | 41 |
 
-Density varies ~60× between decades (4 works in the 1350s, 245 in the 1870s).
-Fixed decade columns would therefore produce mostly empty ones, so the axis is
-**ordinal with adaptive bins** of ~60 works each; each column reports its real
-span, and the overview strip reports works *per year* so the unevenness stays
-visible instead of being hidden by the layout.
+Density varies ~60× between decades (4 works in the 1350s, 245 in the 1870s). A
+linear time axis would therefore be mostly empty, so the axis is **ordinal**: the
+page fits as many works on a line as the line holds, which means a line covers
+thirty years where the collection is thin and one year where it is dense. Every
+line prints its real opening year in the margin, and the foot strip reports works
+*per year* on a linear axis, so the unevenness stays visible instead of being
+flattened by the layout. (The pipeline also emits ~60-work bins; the page does not
+use them, and they are kept only because the JSON schema is shared.)
 
 **The twentieth century cannot be shown.** Public domain effectively ends around
 1910 — "Modern and Contemporary Art" contributes only 14 public-domain paintings.
-The tape stops at a copyright boundary, and the interface says so rather than
+The page stops at a copyright boundary, and the interface says so rather than
 implying art history stopped there.
 
 ### There is no usable "artistic movement" field
@@ -163,45 +166,50 @@ than by the painter.
 `app/` is plain static files — no bundler, no build step, no dependencies. The
 GitHub Actions workflow uploads the directory as-is.
 
-The 11,728 cells are not laid out as a flat field. They are wound onto a tape
-19 rows tall and 638 columns long, and the tape is drawn on a drum: only about a
-fifth of it is on screen at once, the rest curving away into black at both sides.
-You wind it by dragging or scrolling, and the strip along the bottom is both the
-only view of the whole span and the scrubber for it.
+The 11,728 cells are **set as a page of text**: every colour is a letter, every
+painting is a word, every century is a paragraph, and the reading order *is* the
+chronology — 1311 at the top left, 1910 at the bottom right. There is no zoom and
+no horizontal pan, because there is no second axis: moving through the collection
+is reading down the page.
 
-- **The drum's axis is vertical.** That is the decision the rest of the renderer
-  rests on: the perspective factor then depends only on the column, so every cell
-  stays an axis-aligned rectangle drawn with one `fillRect`, and both of its
-  boundaries can be rounded in projected space — which is what keeps the curving
-  surface borderless and edge-to-edge, with no stroke and no gutter anywhere.
-- **The arc is 46°, chosen by measurement.** A cell runs 14 px at the crown and
-  compresses to 6.3 px at the rim, so nothing on the visible surface falls under
-  the 6 px floor the panel look depends on. Past ~52° the edge turns to smear;
-  past ~66° the projection folds back on itself.
-- **Columns outside the arc must be culled before drawing.** `sin()` is periodic,
-  so their projected x re-enters the viewport with a plausible-looking but wrong
-  value. This is enforced in one place, `visibleCols()`.
-- **Columns per bin vary.** Bins carry 169–342 cells, so sizing every bin to the
-  widest would punch black holes through roughly a fifth of the tape. Each bin
-  gets `ceil(cells / rows)` columns instead, and the surface stays solid.
-- Cells are stored **column-major within a bin**, which makes one painting's cells
-  a single contiguous run. Both the hover lift and the selection outline are
-  therefore O(k) in the palette, with no search.
-- Hit testing inverts the projection in closed form (bisection on a monotonic
-  term), so it is exact rather than a scan over cells.
+- **A word is never broken across a line**, which is what keeps a painting
+  readable as one object and why the right edge is ragged. The ragged edge is a
+  consequence of being honest about where works end, not a decoration.
+- **The word spacing and the leading are the design.** Packed edge to edge, 11,728
+  mostly-ochre cells read as static and no painting can be told from its
+  neighbour: the collection really is that brown. 3 px between words and 3 px
+  between lines is what turns the field into text. Cells *inside* a word still
+  touch exactly, so the borderless surface survives where it means something.
+- **Legibility beats fitting.** The whole set does fit one 1440-px screen at a
+  7 px cell — and at that size it is unreadable. The layout takes the largest cell
+  in [7, 11] whose page fits, and if none does it uses 9 px and lets the page
+  scroll: about two screens at 1440×640.
+- **The margin carries the year each line opens with**, straight from the data, and
+  the first line of every century is lit. That is what makes an ordinal axis
+  something you can look up rather than estimate.
+- Each row owns one contiguous slice of words and each word a contiguous run of
+  cells, so `rowStart` reduces hit testing to a **binary search inside one row**,
+  and drawing to one contiguous cell range. A point in the leading is a miss, not
+  a nearest hit.
 - **Canvas 2D**, not DOM and not WebGL: ~12,000 cells is far too many for
-  elements and comfortable for `fillRect`.
+  elements and comfortable for `fillRect`. Every coordinate is a whole CSS pixel,
+  rounded to device pixels at both edges, so neighbouring cells share an exact
+  edge with no stroke and no seam.
 - Transitions between discrete states are a **CRT-style scan-line refresh**: the
   new frame is composed offscreen and swept in over the standing one band by
-  band. Scrolling, zooming and hovering redraw immediately instead — a wipe there
-  would read as lag.
-- Highlighting **never tints a measured colour.** A hovered or selected work is
-  lifted off the drum — its own cells, redrawn larger about their centre — and
-  framed in the single UI accent. The accent never fills a cell.
+  band. Scrolling and hovering redraw immediately instead — a wipe there would
+  read as lag.
+- Highlighting **never tints a measured colour.** A hovered or selected word is
+  framed in the single UI accent, ruled underneath in the leading, and called out
+  in the margin. Every accent pixel lands in space that belongs to no cell.
+- The foot strip is works per year on a **linear** year axis — the one place the
+  real, ~60×-uneven shape of the collection is visible, since the page itself is
+  ordinal. Clicking it jumps to a year.
 
 Selecting a work opens it at 300 CSS px beside a technical sheet: date, school,
-the column's real span and work count, object id, how many of the five requested
-clusters survived the 4% floor, and the extracted colours with their hex values.
+century and its work count, object id, how many of the five requested clusters
+survived the 4% floor, and the extracted colours with their hex values. The arrow
+keys step from one painting to the next in date order.
 Thumbnails are committed to the repo (stage 05) and land at 596–625 px on the long
 edge, median 624 — the target is set above the Met's web-size ceiling on purpose,
 so nothing is upscaled and nothing is discarded. The browser never requests an

@@ -80,7 +80,7 @@ body { display: flex; flex-direction: column; }
 /* ---------- stage ---------- */
 .stage {
   position: relative; flex: 1 1 auto; min-height: 0;
-  overflow: hidden; cursor: crosshair;
+  overflow: hidden; cursor: crosshair; touch-action: none;
   /* faint scan-line texture: reads as a physical LED panel, not a webpage */
   background-image: repeating-linear-gradient(
     0deg, #ffffff04 0 1px, transparent 1px 3px);
@@ -95,12 +95,6 @@ body { display: flex; flex-direction: column; }
   pointer-events: none; transition: opacity .4s linear;
 }
 .stage.is-grabbing .stage__hint { opacity: 0; }
-
-.crosshair {
-  position: absolute; top: 0; bottom: 0; width: 1px;
-  background: var(--accent); opacity: .5; pointer-events: none;
-  box-shadow: 0 0 10px #00ff9d70;
-}
 
 .hoverchip {
   position: absolute; pointer-events: none; z-index: 15;
@@ -151,9 +145,9 @@ button {
 }
 button:hover { color: var(--accent); border-color: var(--accent); }
 
-/* ---------- tape overview ----------
-   The drum shows about a fifth of the tape, so this strip is the only view of the
-   whole span — and it is also the scrubber. */
+/* ---------- span overview ----------
+   The page is ordinal, so this strip is the only place the collection's real
+   shape in time is visible — and it is also how you jump to a year. */
 .timeline { display: flex; align-items: center; gap: 9px; }
 .timeline__label {
   font-size: 8px; letter-spacing: .14em; color: #3c423e;
