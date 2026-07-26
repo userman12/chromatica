@@ -194,7 +194,7 @@ button[aria-pressed="true"] {
   white-space: nowrap; flex: 0 0 auto;
 }
 #timelineCanvas {
-  flex: 1 1 auto; height: 22px; display: block;
+  flex: 1 1 auto; height: 26px; display: block;
   cursor: ew-resize; touch-action: none;
 }
 

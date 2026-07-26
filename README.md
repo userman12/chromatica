@@ -380,6 +380,15 @@ Three more collections moved the trough about half a century later and shaved
 tuned to make the expected narrative come out, and adding data was the honest
 test of that.
 
+This paragraph is now also drawn. The strip under the field carries mean chroma
+per year as a line over the works-per-year bars, smoothed with the same adaptive
+window the field itself uses — so the curve is blurred exactly as much as the
+cloud above it, and for the same reason. It follows the school filter, and where
+a filter leaves the window holding fewer than 30 works the line stops rather than
+guessing — the Dutch curve, for instance, exists for 95 of the 602 years. Read
+against a fixed 10–30 axis, so two schools cannot be made to look alike by each
+rescaling to its own range.
+
 ## Attribution
 
 Images and metadata, all CC0 1.0:

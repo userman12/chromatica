@@ -73,6 +73,11 @@ const SEARCH_MAX = 110;    // how far sigmaAt looks for those works, in years
    swamped the coordinate, and the field collapsed into one round ball with its
    hue geography smeared out of it. Position has to keep winning over density. */
 const SPREAD_FLOOR = 0.42; // blob radius for an average-density cell, in cells
+const MIN_SUPPORT = 30;    // works a window must hold before its chroma is drawn
+/* Chroma is read against a fixed axis rather than a per-filter one: the whole
+   collection spans 14.5 to 25.6, so 10–30 shows the shape without the curve
+   rescaling itself under a filter and making two schools look alike. */
+export const CHROMA_AXIS = [10, 30];
 const SPREAD_GAIN = 0.85;  // how much a cell's blob grows with its share
 const SPREAD_CAP = 2.1;    // no blob ever reaches further than this, in cells
 const EASE = 0.075;        // per-frame approach to the target position: fluid, not snapped
@@ -243,6 +248,63 @@ export class Field {
     return this.chrono
       ? this.tview.oy + (this.tview.maxL - this.lum[i]) * this.tview.sy
       : this.view.oy - this.ly[i] * this.view.scale;
+  }
+
+  /**
+   * Mean chroma — sqrt(a*² + b*²), how far a colour sits from grey — per year.
+   *
+   * This is the piece's own argument, and until now it was only ever stated in
+   * the README: colour is at its most saturated around 1340, collapses to its
+   * minimum in the 1670s, and the nineteenth century climbs back to about two
+   * thirds of the medieval figure while getting much lighter. The field shows
+   * every colour and none of that; a line does the reverse.
+   *
+   * Smoothed with sigmaAt's own window, so the curve is blurred exactly as much
+   * as the field is at that year and for the same reason — three paintings are
+   * not a period's palette. Where a filter leaves the window holding fewer than
+   * MIN_SUPPORT works the curve is not drawn at all, which is the same rule
+   * applied honestly rather than a gap in the data.
+   *
+   * The mean is unweighted across palette entries: a painting's fifth cluster
+   * counts as much as its first. Weighting by cluster share would make the curve
+   * track how much canvas a colour covers rather than which colours were reached
+   * for, and the second is the question.
+   *
+   * @param {number} nat school index, or -1 for all
+   * @returns {{v: Float32Array, ok: Uint8Array}} chroma per year, and where it means anything
+   */
+  chromaCurve(nat = -1) {
+    if (this._curveNat === nat) return this._curve;
+    const N = this.perYear.length;
+    const sum = new Float64Array(N), cnt = new Float64Array(N);
+    for (let i = 0; i < this.n; i++) {
+      if (nat >= 0 && this.natOf[i] !== nat) continue;
+      const idx = this.year[i] - this.y0;
+      sum[idx] += Math.hypot(this.lx[i], this.ly[i]);
+      cnt[idx] += 1;
+    }
+
+    const v = new Float32Array(N), ok = new Uint8Array(N);
+    for (let i = 0; i < N; i++) {
+      const sigma = this.sigmaAt(this.y0 + i);
+      const reach = Math.ceil(sigma * 3);
+      const twoSigmaSq = 2 * sigma * sigma;
+      let num = 0, den = 0;
+      for (let j = Math.max(0, i - reach); j < Math.min(N, i + reach + 1); j++) {
+        if (cnt[j] === 0) continue;
+        const g = Math.exp(-((j - i) ** 2) / twoSigmaSq);
+        num += g * sum[j];
+        den += g * cnt[j];
+      }
+      if (den > 0) v[i] = num / den;
+      // den counts colours, MIN_SUPPORT counts works: PALETTE_MAX is 5, so this
+      // is the weighted equivalent of roughly MIN_SUPPORT paintings in view.
+      ok[i] = den >= MIN_SUPPORT * 5 ? 1 : 0;
+    }
+
+    this._curveNat = nat;
+    this._curve = { v, ok };
+    return this._curve;
   }
 
   /**

@@ -18,7 +18,7 @@
  * measurement in cold monospace, and one line under the field naming its axes,
  * because an axis the viewer cannot name is a decoration.
  */
-import { Field } from "./field.js";
+import { Field, CHROMA_AXIS } from "./field.js";
 import { Nebula } from "./nebula.js";
 
 const PLAY_YEARS_PER_SEC = 7.5;   // the timelapse crawl
@@ -184,7 +184,11 @@ function drawTimeline() {
   const { from, to } = F.stats;
 
   // 600 bars is a redraw, not a repaint: only when the lit span or the handle moved.
-  const key = timed ? `t|${from}|${to}|${Math.round(state.cursor)}` : `a|${state.nat}`;
+  // nat belongs in both keys: the curve follows the filter, so a school change
+  // has to invalidate the strip even mid-timelapse, where it once did not.
+  const key = timed
+    ? `t|${from}|${to}|${Math.round(state.cursor)}|${state.nat}`
+    : `a|${state.nat}`;
   if (key === state.tlKey) return;
   state.tlKey = key;
 
@@ -214,6 +218,32 @@ function drawTimeline() {
     ctx.fillRect(Math.floor(xOf(year)), base - barH, Math.ceil(barW), barH);
   }
 
+  // --- mean chroma, over the bars ---
+  // Drawn twice: once thick in the panel colour, then thin in near-white. The
+  // dark pass is not a shadow, it is a gap cut in the histogram so the line stays
+  // one line where it crosses a lit bar of nearly its own weight.
+  const { v, ok } = F.chromaCurve(state.nat);
+  const [cLo, cHi] = CHROMA_AXIS;
+  const top = h * 0.12, span = h * 0.66;
+  const yOf = (c) => top + span * (1 - clamp((c - cLo) / (cHi - cLo), 0, 1));
+
+  for (const [width, colour, alpha] of [[3.2, "#0a0a0a", 1], [1.3, "#e8f5ef", 0.82]]) {
+    ctx.globalAlpha = alpha;
+    ctx.strokeStyle = colour;
+    ctx.lineWidth = Math.max(1, width * dpr);
+    ctx.lineJoin = ctx.lineCap = "round";
+    ctx.beginPath();
+    let drawing = false;
+    for (let year = y0; year <= y1; year++) {
+      const i = year - y0;
+      if (!ok[i]) { drawing = false; continue; }   // a gap, not a guess
+      const px = xOf(year) + barW / 2, py = yOf(v[i]);
+      if (drawing) ctx.lineTo(px, py);
+      else { ctx.moveTo(px, py); drawing = true; }
+    }
+    ctx.stroke();
+  }
+
   // baseline, and the handle only when there is a year to point at
   ctx.globalAlpha = 1;
   ctx.fillStyle = "#1e2220";
@@ -241,8 +271,8 @@ function setMode(mode, { year = null, play = null } = {}) {
   el.cursorValue.classList.toggle("is-word", !timed);
   if (!timed) el.cursorValue.textContent = "ALL YEARS";
   el.timelineLabel.textContent = timed
-    ? "WORKS PER YEAR · DRAG TO SCRUB"
-    : "WORKS PER YEAR · CLICK TO START A TIMELAPSE";
+    ? "BARS WORKS · LINE CHROMA · DRAG TO SCRUB"
+    : "BARS WORKS · LINE CHROMA · CLICK FOR TIMELAPSE";
   paintPlay();
   paintCopy();
 }
