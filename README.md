@@ -4,10 +4,14 @@
 
 Six centuries of painting, reduced to the colours they are actually made of.
 
-Every cell on the page is a real colour, extracted by k-means clustering from
-the photograph of one real painting in the Metropolitan Museum of Art's public
-domain collection. Nothing is decorative: no colour was chosen, corrected or
-invented, and every cell is clickable back to the work it came from.
+Every particle in the field is a real colour, extracted by k-means clustering
+from the photograph of one real painting in the Metropolitan Museum of Art's
+public domain collection. Nothing is decorative: no colour was chosen, corrected
+or invented, and every particle is clickable back to the work it came from.
+
+Drag the year. The whole field recomposes.
+
+Built by [@userluke_](https://x.com/userluke_).
 
 ---
 
@@ -52,14 +56,14 @@ land inside the requested 2,000–3,000 sample, so nothing is sampled away.
 | 1800s | 1,211 |
 | 1900s | 41 |
 
-Density varies ~60× between decades (4 works in the 1350s, 245 in the 1870s). A
-linear time axis would therefore be mostly empty, so the axis is **ordinal**: the
-page fits as many works on a line as the line holds, which means a line covers
-thirty years where the collection is thin and one year where it is dense. Every
-line prints its real opening year in the margin, and the foot strip reports works
-*per year* on a linear axis, so the unevenness stays visible instead of being
-flattened by the layout. (The pipeline also emits ~60-work bins; the page does not
-use them, and they are kept only because the JSON schema is shared.)
+Density varies ~60× between decades (4 works in the 1350s, 245 in the 1870s).
+This is why time is a **weighted window rather than a bin**: the app widens the
+window where the collection thins, until it holds enough works to be a period's
+palette instead of an accident. Three paintings are not a decade. The track under
+the year plots works *per year* on a linear axis, so the unevenness stays visible
+instead of being smoothed away by the thing that compensates for it. (The pipeline
+also emits ~60-work bins; the app does not use them, and they are kept only
+because the JSON schema is shared.)
 
 **The twentieth century cannot be shown.** Public domain effectively ends around
 1910 — "Modern and Contemporary Art" contributes only 14 public-domain paintings.
@@ -92,8 +96,8 @@ collapse into `Other / unattributed`.
 ### Assumptions, stated explicitly
 
 - Western traditions only; Asian and Islamic Art departments are excluded,
-  because merging independent colour traditions into one chronological grid would
-  misrepresent all of them.
+  because merging independent colour traditions into one chronological survey
+  would misrepresent all of them.
 - `objectBeginDate` is trusted when `objectEndDate − objectBeginDate ≤ 25`; wider
   attributions are too vague to place on a time axis.
 - A deliberately *loose* artist-lifespan sanity check (only 2 rejections): the
@@ -149,7 +153,7 @@ to disk.
 | 01 select | 2,862 candidates from the CSV |
 | 02 image URLs | 2,856 resolved · 6 without an image · 0 failed |
 | 03 palettes | **2,555 usable** · 243 dropped as greyscale · 14 with no stable palette |
-| 04 build | 2,555 paintings · 11,728 colour cells · 40 columns · 1311–1910 · 420 KB |
+| 04 build | 2,555 paintings · 11,728 measured colours · 1311–1910 · 420 KB |
 | 05 thumbs | 2,555 rendered · 0 failed · 596–625 px long edge · 111 MB committed |
 
 Stage 02 lost 80 works to rate-limit failures on its first pass; re-running the
@@ -166,54 +170,91 @@ than by the painter.
 `app/` is plain static files — no bundler, no build step, no dependencies. The
 GitHub Actions workflow uploads the directory as-is.
 
-The 11,728 cells are **set as a page of text**: every colour is a letter, every
-painting is a word, every century is a paragraph, and the reading order *is* the
-chronology — 1311 at the top left, 1910 at the bottom right. There is no zoom and
-no horizontal pan, because there is no second axis: moving through the collection
-is reading down the page.
+The 11,728 colours are **particles in a field**, one per (painting, cluster).
+There is no grid, no row, no cell and no border: only colour against black. The
+whole interface is a year and the track it slides on.
 
-- **A word is never broken across a line**, which is what keeps a painting
-  readable as one object and why the right edge is ragged. The ragged edge is a
-  consequence of being honest about where works end, not a decoration.
-- **The word spacing and the leading are the design.** Packed edge to edge, 11,728
-  mostly-ochre cells read as static and no painting can be told from its
-  neighbour: the collection really is that brown. 3 px between words and 3 px
-  between lines is what turns the field into text. Cells *inside* a word still
-  touch exactly, so the borderless surface survives where it means something.
-- **Legibility beats fitting.** The whole set does fit one 1440-px screen at a
-  7 px cell — and at that size it is unreadable. The layout takes the largest cell
-  in [7, 11] whose page fits, and if none does it uses 9 px and lets the page
-  scroll: about two screens at 1440×640.
-- **The margin carries the year each line opens with**, straight from the data, and
-  the first line of every century is lit. That is what makes an ordinal axis
-  something you can look up rather than estimate.
-- Each row owns one contiguous slice of words and each word a contiguous run of
-  cells, so `rowStart` reduces hit testing to a **binary search inside one row**,
-  and drawing to one contiguous cell range. A point in the leading is a miss, not
-  a nearest hit.
-- **Canvas 2D**, not DOM and not WebGL: ~12,000 cells is far too many for
-  elements and comfortable for `fillRect`. Every coordinate is a whole CSS pixel,
-  rounded to device pixels at both edges, so neighbouring cells share an exact
-  edge with no stroke and no seam.
-- Transitions between discrete states are a **CRT-style scan-line refresh**: the
-  new frame is composed offscreen and swept in over the standing one band by
-  band. Scrolling and hovering redraw immediately instead — a wipe there would
-  read as lag.
-- Highlighting **never tints a measured colour.** A hovered or selected word is
-  framed in the single UI accent, ruled underneath in the leading, and called out
-  in the margin. Every accent pixel lands in space that belongs to no cell.
-- The foot strip is works per year on a **linear** year axis — the one place the
-  real, ~60×-uneven shape of the collection is visible, since the page itself is
-  ordinal. Clicking it jumps to a year.
+### Position is the colour space itself
 
-Selecting a work opens it at 300 CSS px beside a technical sheet: date, school,
-century and its work count, object id, how many of the five requested clusters
-survived the 4% floor, and the extracted colours with their hex values. The arrow
-keys step from one painting to the next in date order.
+A particle sits at its own **CIE L\*a\*b\* chromatic coordinate**: a\* left to
+right, b\* bottom to top (flipped, so yellow is above blue). Neutrals fall in the
+middle, saturated colours reach the rim, hue runs around as angle. Colours that
+look alike land near each other because that is what the space means — the regions
+in the cloud are not drawn, they are what the measurement does on its own.
+
+**Lightness is given no axis on purpose.** Against near-black it is already
+visible as the particle's own brightness, and inventing a direction for it would
+put a made-up axis into a picture whose whole claim is that no axis is made up. A
+dim cloud is a dark century.
+
+### Density, without a bar
+
+The plane is histogrammed on a 6-unit Lab lattice, and each particle is pushed out
+from its exact coordinate in proportion to the share of the period's colour that
+falls in its cell — spread ∝ √(share), so a heavily used region swells and
+thickens while a rare one stays a few sparks. Displacement is measured in **cells,
+never in a fraction of the viewport**: the first version scaled it to the short
+side, ~558 px against a ~41 px cell, and dispersion swamped the chromatic geography
+into a featureless ball. Share is normalised within the period, so scrubbing
+changes the *shape* of the cloud instead of merely inflating it wherever the museum
+owns more paintings. Particle radius follows the cluster's rank within its own
+painting.
+
+### The year
+
+Every painting is weighted by a Gaussian on its distance from the cursor, so the
+field is a moving window, not a bin, and it recomposes by exponential easing rather
+than snapping. σ is adaptive: the window grows until it holds ~110 works, between 9
+and 44 years. Unattended, the year drifts on its own; the first touch ends that
+drift permanently, so no second control is needed to stop it.
+
+### Rendering
+
+**Canvas 2D**, two passes, flat typed arrays, no per-frame allocation — 11,728
+particles at 60 fps, `step()` in 0.33 ms.
+
+- A **glow bed** at 0.34 resolution, drawn back full-size: the upscale *is* the
+  blur, far cheaper than a real one, and it carries the atmosphere.
+- A crisp pass of **skirt plus core**. One filled disc at a readable alpha has a
+  visible rim, and 12,000 rims read as bokeh — a scatter of sequins you can count
+  — instead of as a mist. Two radii is the cheapest falloff that kills the edge.
+- **`source-over` only, never `lighter`.** Additive blending looks spectacular and
+  lies: overlapping colours converge on white, so a dense region of deep Venetian
+  red would render as a pink glare. With source-over, stacking one colour
+  approaches that colour — density reads as solidity, and every point of the cloud
+  stays a colour some painter actually mixed.
+- Draw order is sorted **darkest first**, so where two particles overlap the
+  brighter measurement survives instead of punching a black hole in its
+  neighbour's glow. No colour is altered either way.
+- Jitter comes from a deterministic hash, never `Math.random()`, so a particle
+  keeps its place across frames and reloads.
+- The only accent-coloured mark inside the field is the 1 px ring around a
+  selected particle. Nothing tints a measured colour.
+
+The track under the year plots works per year on a **linear** axis, log-scaled in
+height, with the active window lit — the one place the real, ~60×-uneven shape of
+the collection is visible.
+
+### The optional second layer
+
+Clicking a particle opens the painting it was measured from at 300 CSS px beside a
+technical sheet: date, school, object id, how many of the five requested clusters
+survived the 4% floor, and the palette with hex values, the clicked one marked.
 Thumbnails are committed to the repo (stage 05) and land at 596–625 px on the long
 edge, median 624 — the target is set above the Met's web-size ceiling on purpose,
 so nothing is upscaled and nothing is discarded. The browser never requests an
-image from the Met.
+image from the Met. Keyboard: arrows ±1 year, Shift ±10, PageUp/Down ±50,
+Home/End, Escape closes. `?y=1600` deep-links a year.
+
+### What the field actually shows
+
+Worth recording because it contradicts the obvious story. Weighted the same way
+the app weights them, the **late Middle Ages are the most chromatic period in this
+collection** — mean chroma 25.9 around 1340, which is gold ground, vermilion and
+ultramarine, not mud. The darkest and least saturated stretch is the **Baroque,
+~1600–1620** (mean L\* 29.5, mean chroma 14.9): tenebrism, not archaism. 1905 is
+the brightest (mean L\* 41.6). The visualisation was not tuned to make the
+expected narrative come out.
 
 ## Attribution
 

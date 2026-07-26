@@ -1,159 +1,116 @@
-/* CHROMATICA — application shell: data load, page state, input, HUD.
+/* CHROMATICA — application shell.
  *
- * The view is one number: how far down the page you have read. There is no zoom
- * and no horizontal pan, because there is no second axis to explore — reading
- * order is time, so moving through the collection is moving down the page, and
- * that is the whole navigation model.
+ * The interaction model is one gesture. There is no zoom, no pan, no filter and no
+ * sort: you drag a year, and the whole field of colour recomposes around it. That
+ * is the entire instrument, and the restraint is the point — the experience is
+ * meant to be watched, not operated.
  *
- * Everything else here exists to answer "which painting is this?" as directly as
- * possible: a chip while pointing, a technical sheet on click, arrow keys to step
- * word by word, and a linear works-per-year strip at the foot to jump by year.
+ * Two things are deliberately not buttons:
+ *
+ *  - Time moves on its own until you touch it. Opening the page starts a slow
+ *    drift through the centuries, so the default state is contemplative; the first
+ *    touch hands control over for good. A play/pause pair would have been a second
+ *    control, and there is only allowed to be one.
+ *  - Dragging horizontally anywhere on the field scrubs, not just on the track.
+ *    The cloud is the instrument; the track is only where the reading is printed.
+ *
+ * Clicking a particle to see its painting is a second layer, not a requirement.
  */
-import {
-  buildLayout, hitTest, visibleRows, maxScroll, rowYear,
-} from "./layout.js";
-import { Renderer } from "./renderer.js";
+import { Field } from "./field.js";
+import { Nebula } from "./nebula.js";
 
 const MET_URL = "https://www.metmuseum.org/art/collection/search/";
-const WHEEL_GAIN = 1;          // page scroll: the wheel means what it says
-const FRICTION = 0.9;
-const VEL_MIN = 0.4;           // px/frame
-const CLICK_SLOP = 4;          // px of movement still counted as a click
+const DRIFT_YEARS_PER_SEC = 7.5;   // the unattended crawl through history
+const SCRUB_SLOP = 4;              // px of movement still counted as a click
+const STAGE_GAIN = 1.35;           // years per px when dragging on the field itself
 
 const $ = (id) => document.getElementById(id);
 const el = {
   boot: $("boot"), bootLog: $("bootLog"),
-  stage: $("stage"), grid: $("grid"), hoverchip: $("hoverchip"),
-  statWorks: $("statWorks"), statCells: $("statCells"),
-  statSpan: $("statSpan"), statCell: $("statCell"),
-  atYear: $("atYear"), cursorFrom: $("cursorFrom"), cursorTo: $("cursorTo"),
-  filterNat: $("filterNat"), timeline: $("timelineCanvas"),
-  btnTop: $("btnTop"), btnReset: $("btnReset"), btnInfo: $("btnInfo"),
+  stage: $("stage"), field: $("field"),
+  year: $("year"), track: $("track"), hint: $("hint"),
+  btnInfo: $("btnInfo"), about: $("about"), aboutClose: $("aboutClose"),
+  aboutMethod: $("aboutMethod"), aboutSource: $("aboutSource"),
   detail: $("detail"), detailClose: $("detailClose"), detailImg: $("detailImg"),
   detailTitle: $("detailTitle"), detailArtist: $("detailArtist"),
   detailYear: $("detailYear"), detailNat: $("detailNat"), detailId: $("detailId"),
-  detailCentury: $("detailCentury"), detailPalette: $("detailPalette"),
-  detailSwatches: $("detailSwatches"), detailLink: $("detailLink"),
-  about: $("about"), aboutClose: $("aboutClose"),
-  aboutMethod: $("aboutMethod"), aboutSource: $("aboutSource"),
+  detailPalette: $("detailPalette"), detailSwatches: $("detailSwatches"),
+  detailLink: $("detailLink"),
 };
+
+const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
 const state = {
-  data: null, layout: null,
-  scrollY: 0,
+  data: null, field: null,
+  cursor: 0,          // the year, kept as a float so the drift is smooth
+  drifting: !reduceMotion,
+  selected: -1,       // particle index
   cssW: 0, cssH: 0,
-  selected: -1,
-  matches: null,          // Uint8Array over paintings, or null when unfiltered
-  hovered: -1,
 };
-const renderer = new Renderer(el.grid);
-let yearCounts = null;    // works per year across the whole span, for the foot strip
+const nebula = new Nebula(el.field);
 
-/* ---------- boot ---------- */
-const bootLines = ["CHROMATICA v0.1"];
-function boot(line) {
-  bootLines.push(line);
-  el.bootLog.textContent = bootLines.join("\n");
-}
-
-/* ---------- helpers ---------- */
 const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
 const num = (n) => n.toLocaleString("en-US");
 const span = (s, e) => (s === e ? String(s) : `${s}–${e}`);
 
-/* ---------- view maintenance ---------- */
+/* ---------- boot ---------- */
+const bootLines = ["CHROMATICA v0.2"];
+const boot = (line) => {
+  bootLines.push(line);
+  el.bootLog.textContent = bootLines.join("\n");
+};
+
+/* ---------- view ---------- */
 function measure() {
   const rect = el.stage.getBoundingClientRect();
   state.cssW = Math.max(1, Math.floor(rect.width));
   state.cssH = Math.max(1, Math.floor(rect.height));
-  renderer.resize(state.cssW, state.cssH);
+  nebula.resize(state.cssW, state.cssH);
+  state.field.resize(state.cssW, state.cssH);
 }
 
-function relayout() {
-  // Hold your place across a resize. The cell size and the line width both change,
-  // so the row you were on is not the row you will be on — the year is the thing
-  // worth preserving, because the year is what the page is about.
-  const year = state.layout ? rowYear(state.layout, state.data, topRow()) : null;
-  state.layout = buildLayout(state.data, state.cssW, state.cssH);
-  if (year !== null) scrollToYear(year, false);
-  clampScroll();
-}
+/* ---------- the loop ---------- */
+let t0 = 0;
+let last = 0;
 
-const topRow = () =>
-  clamp(Math.round((state.scrollY - state.layout.padTop) / state.layout.pitch),
-    0, state.layout.rows - 1);
+function frame(now) {
+  const t = (now - (t0 ||= now)) / 1000;
+  const dt = Math.min(0.05, (now - (last || now)) / 1000);
+  last = now;
 
-function clampScroll() {
-  state.scrollY = clamp(Math.round(state.scrollY), 0, maxScroll(state.layout, state.cssH));
-}
-
-/** Put the first line that reaches `year` at the top of the stage. */
-function scrollToYear(year, redraw = true) {
-  const L = state.layout;
-  let target = 0;
-  for (let row = 0; row < L.rows; row++) {
-    const y = rowYear(L, state.data, row);
-    if (y !== null && y >= year) { target = row; break; }
-    target = row;
-  }
-  state.scrollY = L.padTop + target * L.pitch - L.padTop;
-  clampScroll();
-  if (redraw) render();
-}
-
-/** Bring a painting fully into view without moving the page when it already is. */
-function revealPainting(index) {
-  const L = state.layout;
-  const row = L.paintingRow[index];
-  const top = L.padTop + row * L.pitch;
-  if (top < state.scrollY + L.pitch) state.scrollY = top - L.pitch;
-  else if (top + L.cell > state.scrollY + state.cssH - L.pitch) {
-    state.scrollY = top + L.cell + L.pitch - state.cssH;
-  }
-  clampScroll();
-}
-
-/* ---------- render + HUD ---------- */
-function render(withScan) {
-  if (withScan) renderer.scan(state); else renderer.draw(state);
-  updateHud();
-}
-
-function updateHud() {
-  const L = state.layout;
-  const [r0, r1] = visibleRows(L, state.cssH, state.scrollY);
-  const p0 = L.rowStart[r0];
-  const p1 = L.rowStart[Math.min(r1 + 1, L.rows + 1)];
-  const paintings = state.data.paintings;
-
-  let works = 0, cells = 0;
-  for (let pi = p0; pi < p1; pi++) {
-    if (state.matches && state.matches[pi] !== 1) continue;
-    works++;
-    cells += paintings[pi].k.length;
+  if (state.drifting) {
+    state.cursor += DRIFT_YEARS_PER_SEC * dt;
+    if (state.cursor > state.field.y1) state.cursor = state.field.y0;  // it loops only while unattended
   }
 
-  const from = p0 < paintings.length ? paintings[p0].y : paintings[paintings.length - 1].y;
-  const to = paintings[Math.max(p0, Math.min(p1, paintings.length) - 1)].y;
-  el.statWorks.textContent = num(works);
-  el.statCells.textContent = num(cells);
-  el.statSpan.textContent = `${to - from + 1}y`;
-  el.statCell.textContent = `${L.cell}px`;
-  el.atYear.textContent = from;
-  el.cursorFrom.textContent = from;
-  el.cursorTo.textContent = to;
+  state.field.step(state.cursor, t, reduceMotion);
+  nebula.draw(state.field, state.selected);
+  paintReadout();
+  requestAnimationFrame(frame);
+}
 
-  drawTimeline(from, to);
+function paintReadout() {
+  const year = Math.round(state.cursor);
+  if (el.year.textContent !== String(year)) {
+    el.year.textContent = year;
+    el.track.setAttribute("aria-valuenow", year);
+    el.track.setAttribute("aria-valuetext",
+      `${year}, ${num(state.field.stats.works)} works in the window`);
+  }
+  drawTrack();
 }
 
 /**
- * The foot strip: works per year, on a LINEAR year axis, across the whole span.
- * The page itself is ordinal — a line covers one year in the 1870s and thirty in
- * the 1350s — so this is the one place the real shape of the collection is visible,
- * and it doubles as the way to jump to a year.
+ * The track: works per year on a linear year axis, log-scaled in height.
+ *
+ * It is not decoration and not a progress bar. The field is a moving window over a
+ * collection that is about sixty times denser in the 1870s than in the 1350s, and
+ * this is the only place that unevenness is visible. The lit span is the window
+ * currently contributing colour, so its width visibly breathes as thin centuries
+ * force the window open.
  */
-function drawTimeline(from, to) {
-  const canvas = el.timeline;
+function drawTrack() {
+  const canvas = el.track;
   const dpr = Math.min(window.devicePixelRatio || 1, 2);
   const w = Math.max(1, Math.round(canvas.clientWidth * dpr));
   const h = Math.max(1, Math.round(canvas.clientHeight * dpr));
@@ -161,37 +118,137 @@ function drawTimeline(from, to) {
   const ctx = canvas.getContext("2d");
   ctx.clearRect(0, 0, w, h);
 
-  const [y0, y1] = state.data.meta.yearRange;
+  const F = state.field;
+  const { from, to } = F.stats;
+  const y0 = F.y0, y1 = F.y1;
   const xOf = (year) => ((year - y0) / (y1 - y0 + 1)) * w;
   const barW = Math.max(1, w / (y1 - y0 + 1));
 
-  // Log scale: the 1870s carry ~60x the works of the 1350s, and on a linear scale
-  // every thin decade would read as empty rather than as thin.
   let peak = 0;
-  for (const c of yearCounts) if (c > peak) peak = c;
+  for (const c of F.perYear) if (c > peak) peak = c;
 
+  const base = h - Math.max(1, dpr);
   for (let year = y0; year <= y1; year++) {
-    const c = yearCounts[year - y0];
+    const c = F.perYear[year - y0];
     if (!c) continue;
-    const barH = Math.max(1, Math.round((Math.log1p(c) / Math.log1p(peak)) * (h - 1)));
-    ctx.fillStyle = year >= from && year <= to ? "#00ff9d" : "#2a2f2c";
-    ctx.fillRect(Math.floor(xOf(year)), h - barH, Math.ceil(barW), barH);
+    const barH = Math.max(1, Math.round((Math.log1p(c) / Math.log1p(peak)) * (base - 1)));
+    const lit = year >= from && year <= to;
+    ctx.globalAlpha = lit ? 0.85 : 0.3;
+    ctx.fillStyle = lit ? "#00ff9d" : "#2e3532";
+    ctx.fillRect(Math.floor(xOf(year)), base - barH, Math.ceil(barW), barH);
   }
 
-  // Where you are reading, as a window on the real timeline.
-  ctx.strokeStyle = "#00ff9d";
-  ctx.globalAlpha = 0.5;
-  ctx.lineWidth = Math.max(1, dpr);
-  ctx.strokeRect(Math.floor(xOf(from)) + 0.5, 0.5,
-    Math.max(2, Math.ceil(xOf(to + 1) - xOf(from))), h - 1);
+  // baseline + handle: the two thinnest possible marks
   ctx.globalAlpha = 1;
+  ctx.fillStyle = "#1e2220";
+  ctx.fillRect(0, base, w, Math.max(1, dpr));
+  const hx = Math.round(xOf(state.cursor));
+  ctx.fillStyle = "#00ff9d";
+  ctx.fillRect(hx, 0, Math.max(1, dpr), h);
 }
 
-/* ---------- panels ---------- */
-function showDetail(index) {
-  const p = state.data.paintings[index];
-  const century = state.layout.paras.find((q) => index >= q.p0 && index <= q.p1);
-  state.selected = index;
+/* ---------- scrubbing ---------- */
+function setCursor(year, byHand = true) {
+  state.cursor = clamp(year, state.field.y0, state.field.y1);
+  if (byHand) takeControl();
+}
+
+/** The first touch ends the unattended drift, permanently. */
+function takeControl() {
+  if (state.drifting) {
+    state.drifting = false;
+    el.hint.classList.add("scrub__hint--gone");
+  }
+}
+
+function yearAtTrack(clientX) {
+  const rect = el.track.getBoundingClientRect();
+  const f = clamp((clientX - rect.left) / rect.width, 0, 1);
+  return state.field.y0 + f * (state.field.y1 - state.field.y0);
+}
+
+function bindInput() {
+  /* --- the track --- */
+  let onTrack = false;
+  el.track.addEventListener("pointerdown", (event) => {
+    onTrack = true;
+    el.track.setPointerCapture(event.pointerId);
+    setCursor(yearAtTrack(event.clientX));
+  });
+  el.track.addEventListener("pointermove", (event) => {
+    if (onTrack) setCursor(yearAtTrack(event.clientX));
+  });
+  const releaseTrack = () => { onTrack = false; };
+  el.track.addEventListener("pointerup", releaseTrack);
+  el.track.addEventListener("pointercancel", releaseTrack);
+
+  /* --- the field itself: horizontal drag scrubs, a tap opens a painting --- */
+  let drag = null;
+  el.stage.addEventListener("pointerdown", (event) => {
+    el.stage.setPointerCapture(event.pointerId);
+    drag = { x: event.clientX, from: state.cursor, moved: 0 };
+  });
+  el.stage.addEventListener("pointermove", (event) => {
+    if (!drag) return;
+    const dx = event.clientX - drag.x;
+    drag.moved = Math.max(drag.moved, Math.abs(dx));
+    if (drag.moved >= SCRUB_SLOP) {
+      el.stage.classList.add("is-scrubbing");
+      setCursor(drag.from + dx * STAGE_GAIN);
+    }
+  });
+  const endStage = (event) => {
+    if (!drag) return;
+    const wasTap = drag.moved < SCRUB_SLOP;
+    drag = null;
+    el.stage.classList.remove("is-scrubbing");
+    if (!wasTap) return;
+    const rect = el.stage.getBoundingClientRect();
+    const hit = state.field.pick(event.clientX - rect.left, event.clientY - rect.top);
+    if (hit >= 0) showDetail(hit); else hideDetail();
+  };
+  el.stage.addEventListener("pointerup", endStage);
+  el.stage.addEventListener("pointercancel", () => {
+    drag = null;
+    el.stage.classList.remove("is-scrubbing");
+  });
+
+  /* --- keyboard: the same single gesture, in steps --- */
+  window.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") { hideDetail(); el.about.hidden = true; return; }
+    let dy = 0;
+    if (event.key === "ArrowRight") dy = event.shiftKey ? 10 : 1;
+    else if (event.key === "ArrowLeft") dy = event.shiftKey ? -10 : -1;
+    else if (event.key === "PageUp") dy = -50;
+    else if (event.key === "PageDown") dy = 50;
+    else if (event.key === "Home") { setCursor(state.field.y0); event.preventDefault(); return; }
+    else if (event.key === "End") { setCursor(state.field.y1); event.preventDefault(); return; }
+    else return;
+    event.preventDefault();
+    setCursor(Math.round(state.cursor) + dy);
+  });
+
+  el.btnInfo.addEventListener("click", () => { el.about.hidden = false; });
+  el.aboutClose.addEventListener("click", () => { el.about.hidden = true; });
+  el.detailClose.addEventListener("click", hideDetail);
+
+  let resizeTimer;
+  window.addEventListener("resize", () => {
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(measure, 120);
+  });
+}
+
+/* ---------- the optional second layer ---------- */
+function showDetail(particle) {
+  const F = state.field;
+  const p = state.data.paintings[F.owner[particle]];
+  const thisHex = F.css[particle];
+  state.selected = particle;
+  // The scrub stops while you are looking at a work: the particle you clicked
+  // would otherwise fade out from under the panel.
+  takeControl();
+
   el.detailImg.src = `thumbs/${p.i}.jpg`;
   el.detailImg.alt = p.t || "Untitled";
   el.detailTitle.textContent = p.t || "Untitled";
@@ -199,259 +256,38 @@ function showDetail(index) {
   el.detailYear.textContent = span(p.s, p.e);
   el.detailNat.textContent = state.data.meta.nationalities[p.n] || "—";
   el.detailId.textContent = p.i;
-  el.detailCentury.textContent = century
-    ? `${century.century}s · ${num(century.works)} works`
-    : "—";
   // k-means runs with k=5; clusters under 4% of pixels are dropped, so a shorter
   // palette is a real statement about the painting, not a failure.
   el.detailPalette.textContent = p.k.length === 5
     ? "5 of 5 clusters retained"
     : `${p.k.length} of 5 retained · ${5 - p.k.length} below the 4% floor`;
-  // Hex values are the measurement. They are shown as text, not just as colour.
-  el.detailSwatches.innerHTML = p.k.map((hex) =>
-    `<li><i style="background:${hex}"></i><code>${hex.toUpperCase()}</code></li>`).join("");
+  // The clicked colour is marked, and every hex is printed: the hex is the
+  // measurement, and it should not be left implicit in a swatch.
+  el.detailSwatches.innerHTML = p.k.map((h) =>
+    `<li class="${h === thisHex ? "is-this" : ""}"><i style="background:${h}"></i>`
+    + `<code>${h.toUpperCase()}</code></li>`).join("");
   el.detailLink.href = MET_URL + p.i;
   el.detail.hidden = false;
-  render();
 }
 
 function hideDetail() {
-  if (el.detail.hidden && state.selected < 0) return;
   el.detail.hidden = true;
   state.selected = -1;
-  render();
 }
 
-/* ---------- filter ---------- */
-function applyFilter(natIndex) {
-  if (natIndex < 0) {
-    state.matches = null;
-  } else {
-    const paintings = state.data.paintings;
-    const m = new Uint8Array(paintings.length);
-    for (let i = 0; i < paintings.length; i++) m[i] = paintings[i].n === natIndex ? 1 : 0;
-    state.matches = m;
-  }
-  render(true);
-}
-
-/* ---------- input ---------- */
-function stagePoint(event) {
-  const rect = el.stage.getBoundingClientRect();
-  return [event.clientX - rect.left, event.clientY - rect.top];
-}
-
-let velocity = 0;
-let coasting = null;
-
-function coast() {
-  if (Math.abs(velocity) < VEL_MIN) { coasting = null; velocity = 0; render(); return; }
-  state.scrollY += velocity;
-  const before = state.scrollY;
-  clampScroll();
-  if (state.scrollY !== before) velocity = 0;      // hit an end: stop dead
-  velocity *= FRICTION;
-  render();
-  coasting = requestAnimationFrame(coast);
-}
-
-function stopCoast() {
-  if (coasting) cancelAnimationFrame(coasting);
-  coasting = null;
-  velocity = 0;
-}
-
-function hover(x, y) {
-  const hit = hitTest(state.layout, x, y, state.scrollY);
-  const painting = hit >= 0 ? state.layout.cellPainting[hit] : -1;
-  if (painting !== state.hovered) {
-    state.hovered = painting;
-    updateHoverChip(painting, x, y);
-    renderer.draw(state);            // the frame and the ruler are part of the frame
-  } else if (painting >= 0) {
-    placeHoverChip(x, y);
-  }
-}
-
-function bindInput() {
-  el.stage.addEventListener("wheel", (event) => {
-    event.preventDefault();
-    stopCoast();
-    state.scrollY += (Math.abs(event.deltaY) > Math.abs(event.deltaX)
-      ? event.deltaY : event.deltaX) * WHEEL_GAIN;
-    clampScroll();
-    render();
-  }, { passive: false });
-
-  let dragging = null;
-  el.stage.addEventListener("pointerdown", (event) => {
-    el.stage.setPointerCapture(event.pointerId);
-    stopCoast();
-    dragging = { y: event.clientY, moved: 0, from: state.scrollY, last: state.scrollY };
-    el.stage.classList.add("is-grabbing");
-  });
-
-  el.stage.addEventListener("pointermove", (event) => {
-    const [x, y] = stagePoint(event);
-    if (dragging) {
-      const dy = event.clientY - dragging.y;
-      dragging.moved = Math.max(dragging.moved, Math.abs(dy));
-      state.scrollY = dragging.from - dy;          // the page follows the hand
-      clampScroll();
-      velocity = state.scrollY - dragging.last;
-      dragging.last = state.scrollY;
-      render();
-      return;
-    }
-    hover(x, y);
-  });
-
-  const endDrag = (event) => {
-    if (!dragging) return;
-    const wasClick = dragging.moved < CLICK_SLOP;
-    dragging = null;
-    el.stage.classList.remove("is-grabbing");
-    if (wasClick) {
-      const [x, y] = stagePoint(event);
-      const hit = hitTest(state.layout, x, y, state.scrollY);
-      if (hit >= 0) showDetail(state.layout.cellPainting[hit]); else hideDetail();
-      return;
-    }
-    if (Math.abs(velocity) >= VEL_MIN) coasting = requestAnimationFrame(coast);
-  };
-  el.stage.addEventListener("pointerup", endDrag);
-  el.stage.addEventListener("pointercancel", () => {
-    dragging = null;
-    el.stage.classList.remove("is-grabbing");
-  });
-
-  el.stage.addEventListener("pointerleave", () => {
-    el.hoverchip.hidden = true;
-    if (state.hovered >= 0) { state.hovered = -1; renderer.draw(state); }
-  });
-
-  const jump = (event) => {
-    const rect = el.timeline.getBoundingClientRect();
-    const [y0, y1] = state.data.meta.yearRange;
-    const f = clamp((event.clientX - rect.left) / rect.width, 0, 1);
-    stopCoast();
-    scrollToYear(Math.round(y0 + f * (y1 - y0)));
-  };
-  el.timeline.addEventListener("pointerdown", (event) => {
-    el.timeline.setPointerCapture(event.pointerId);
-    jump(event);
-  });
-  el.timeline.addEventListener("pointermove", (event) => {
-    if (event.buttons === 1) jump(event);
-  });
-
-  el.btnTop.addEventListener("click", () => {
-    stopCoast();
-    state.scrollY = 0;
-    render(true);
-  });
-  el.btnReset.addEventListener("click", resetView);
-  el.btnInfo.addEventListener("click", () => { el.about.hidden = false; });
-  el.aboutClose.addEventListener("click", () => { el.about.hidden = true; });
-  el.detailClose.addEventListener("click", hideDetail);
-  el.filterNat.addEventListener("change", (event) => applyFilter(Number(event.target.value)));
-
-  window.addEventListener("keydown", (event) => {
-    const L = state.layout;
-    const page = Math.max(L.pitch, state.cssH - L.pitch * 2);
-    if (event.key === "Escape") { hideDetail(); el.about.hidden = true; return; }
-    if (event.key === "ArrowRight" || event.key === "ArrowLeft") {
-      event.preventDefault();
-      stepWork(event.key === "ArrowRight" ? 1 : -1);
-      return;
-    }
-    let dy = 0;
-    if (event.key === "ArrowDown") dy = L.pitch;
-    else if (event.key === "ArrowUp") dy = -L.pitch;
-    else if (event.key === "PageDown" || event.key === " ") dy = page;
-    else if (event.key === "PageUp") dy = -page;
-    else if (event.key === "Home") dy = -Infinity;
-    else if (event.key === "End") dy = Infinity;
-    else return;
-    event.preventDefault();
-    stopCoast();
-    state.scrollY = dy === Infinity ? maxScroll(L, state.cssH)
-      : dy === -Infinity ? 0 : state.scrollY + dy;
-    clampScroll();
-    render();
-  });
-
-  let resizeTimer;
-  window.addEventListener("resize", () => {
-    clearTimeout(resizeTimer);
-    resizeTimer = setTimeout(() => { measure(); relayout(); render(); }, 120);
-  });
-}
-
-/** Arrow keys walk the collection one work at a time, in chronological order. */
-function stepWork(dir) {
-  const n = state.data.paintings.length;
-  const next = state.selected < 0
-    ? (dir > 0 ? state.layout.rowStart[topRow()] : n - 1)
-    : clamp(state.selected + dir, 0, n - 1);
-  stopCoast();
-  revealPainting(next);
-  showDetail(next);
-}
-
-function resetView() {
-  hideDetail();
-  stopCoast();
-  state.scrollY = 0;
-  state.hovered = -1;
-  el.hoverchip.hidden = true;
-  if (state.matches) { el.filterNat.value = "-1"; state.matches = null; }
-  render(true);
-}
-
-function updateHoverChip(index, x, y) {
-  if (index < 0) { el.hoverchip.hidden = true; return; }
-  const p = state.data.paintings[index];
-  el.hoverchip.innerHTML = `<b>${escapeHtml(p.t || "Untitled")}</b>`
-    + `<i>${escapeHtml(p.a || "Unattributed")} · ${span(p.s, p.e)}</i>`;
-  el.hoverchip.hidden = false;
-  placeHoverChip(x, y);
-}
-
-function placeHoverChip(x, y) {
-  const chip = el.hoverchip;
-  const flipX = x + 18 + chip.offsetWidth > state.cssW;
-  const flipY = y + 18 + chip.offsetHeight > state.cssH;
-  chip.style.left = Math.round(flipX ? x - 14 - chip.offsetWidth : x + 14) + "px";
-  chip.style.top = Math.round(flipY ? y - 12 - chip.offsetHeight : y + 12) + "px";
-}
-
+/* ---------- init ---------- */
 function escapeHtml(text) {
   return String(text).replace(/[&<>"]/g, (c) =>
     ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
 }
 
-/* ---------- init ---------- */
 function fillAbout(meta) {
-  const notes = meta.notes || {};
-  el.aboutMethod.innerHTML = Object.values(notes)
+  el.aboutMethod.innerHTML = Object.values(meta.notes || {})
     .map((note) => `<li>${escapeHtml(note)}</li>`).join("");
   el.aboutSource.textContent =
     `${num(meta.totalPaintings)} paintings, ${num(meta.totalCells)} extracted colours, `
     + `${meta.yearRange[0]}–${meta.yearRange[1]}. `
     + `Built from the Met Open Access dataset snapshot of ${meta.sourceCsvSnapshot}.`;
-}
-
-function fillFilter(nationalities) {
-  const options = nationalities
-    .map((name, index) => ({ name, index }))
-    .sort((a, b) => a.name.localeCompare(b.name));
-  for (const { name, index } of options) {
-    const option = document.createElement("option");
-    option.value = String(index);
-    option.textContent = name.toUpperCase();
-    el.filterNat.appendChild(option);
-  }
 }
 
 async function init() {
@@ -463,34 +299,39 @@ async function init() {
     data = await response.json();
   } catch (error) {
     boot(`! dataset unavailable: ${error.message}`);
-    boot("! the page cannot be set.");
+    boot("! the field cannot be composed.");
     return;
   }
 
   state.data = data;
-  const [y0, y1] = data.meta.yearRange;
-  yearCounts = new Int32Array(y1 - y0 + 1);
-  for (const p of data.paintings) yearCounts[p.y - y0]++;
-
   boot(`> ${num(data.meta.totalPaintings)} paintings / `
     + `${num(data.meta.totalCells)} extracted colours`);
-  boot(`> ${y0}–${y1} / ${data.meta.nationalities.length} schools`);
 
-  fillFilter(data.meta.nationalities);
+  state.field = new Field(data);
+  // ?y=1600 opens on a year and does not drift. Not a control — nothing on screen
+  // changes — but a moment in the field is worth being able to hand to someone.
+  const asked = Number(new URLSearchParams(location.search).get("y"));
+  if (Number.isFinite(asked) && asked >= state.field.y0 && asked <= state.field.y1) {
+    state.cursor = asked;
+    state.drifting = false;
+    el.hint.classList.add("scrub__hint--gone");
+  } else {
+    state.cursor = state.field.y0;
+  }
+  boot(`> ${state.field.n.toLocaleString("en-US")} particles in CIE L*a*b*`);
+  boot(`> ${state.field.y0}–${state.field.y1} / window is adaptive`);
+
+  el.track.setAttribute("aria-valuemin", state.field.y0);
+  el.track.setAttribute("aria-valuemax", state.field.y1);
   fillAbout(data.meta);
   measure();
-  relayout();
-  boot(`> setting ${state.layout.rows} lines at ${state.layout.cell}px`);
-  boot("> scanning ...");
-
   bindInput();
-  updateHud();
+  boot("> composing ...");
 
-  // one deliberate beat on the boot readout, then the page scans itself in
-  await new Promise((resolve) => setTimeout(resolve, 420));
+  await new Promise((resolve) => setTimeout(resolve, 460));
   el.boot.classList.add("boot--done");
-  renderer.scan(state);
-  setTimeout(() => { el.boot.hidden = true; }, 700);
+  requestAnimationFrame(frame);
+  setTimeout(() => { el.boot.hidden = true; }, 800);
 }
 
 init();

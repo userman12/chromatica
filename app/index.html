@@ -1,131 +1,123 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
-<title>CHROMATICA — colour extracted from six centuries of painting</title>
-<meta name="description" content="Every cell is a real colour extracted from a real painting in the Metropolitan Museum of Art, set as a page of text running from 1311 to 1910.">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>CHROMATICA — the colour of six centuries of painting</title>
+<meta name="description" content="Every colour of 2,555 public-domain paintings from The Metropolitan Museum of Art, 1311–1910, floating in the CIE L*a*b* chromatic plane. Drag the year and watch the field recompose.">
+<meta name="color-scheme" content="dark">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' fill='%230a0a0a'/%3E%3Ccircle cx='6.5' cy='6' r='3.2' fill='%23c8873c'/%3E%3Ccircle cx='10' cy='10' r='2.6' fill='%235d7f86'/%3E%3C/svg%3E">
 <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
 
-<div id="boot" class="boot">
-  <pre class="boot__log" id="bootLog">CHROMATICA v0.1</pre>
-</div>
-
-<header class="hud hud--top">
-  <div class="hud__brand">
-    <span class="hud__title">CHROMATICA</span>
-    <span class="hud__sub">SIX CENTURIES SET AS ONE PAGE / MET OPEN ACCESS</span>
-  </div>
-  <dl class="readout" id="readout">
-    <div><dt>WORKS</dt><dd id="statWorks">····</dd></div>
-    <div><dt>CELLS</dt><dd id="statCells">····</dd></div>
-    <div><dt>SPAN</dt><dd id="statSpan">····</dd></div>
-    <div><dt>CELL</dt><dd id="statCell">··px</dd></div>
-  </dl>
-</header>
+<!-- One deliberate beat of a technical readout before the field appears. -->
+<div class="boot" id="boot"><pre class="boot__log" id="bootLog">CHROMATICA v0.2</pre></div>
 
 <main class="stage" id="stage">
-  <canvas id="grid"></canvas>
-  <div class="hoverchip" id="hoverchip" hidden></div>
-  <p class="stage__hint">SCROLL TO READ · CLICK A WORD FOR THE PAINTING · ← → TO STEP</p>
+  <canvas id="field"></canvas>
 </main>
 
-<footer class="hud hud--bottom">
-  <div class="controls">
-    <div class="cursor">
-      <span class="cursor__label">READING</span>
-      <span class="cursor__year" id="atYear">····</span>
-      <span class="cursor__range">
-        <span class="cursor__label">ON SCREEN</span>
-        <b id="cursorFrom">····</b><span class="cursor__dash">→</span><b id="cursorTo">····</b>
-      </span>
-    </div>
-    <label class="filter">
-      <span class="filter__label">SCHOOL</span>
-      <select id="filterNat"><option value="-1">ALL</option></select>
-    </label>
-    <div class="btns">
-      <button id="btnTop" title="Back to 1311 (Home)">TOP</button>
-      <button id="btnReset" title="Clear filter and selection">RESET</button>
-      <button id="btnInfo" title="About">?</button>
-    </div>
-  </div>
-  <div class="timeline">
-    <span class="timeline__label">WHOLE SPAN / WORKS PER YEAR / LOG / CLICK TO JUMP</span>
-    <canvas id="timelineCanvas"></canvas>
-  </div>
+<!-- The whole interface: a year, and the track it slides on. -->
+<footer class="scrub" id="scrub">
+  <div class="scrub__year" id="year" aria-hidden="true">1311</div>
+  <canvas id="track" tabindex="0" role="slider"
+          aria-label="Year" aria-valuemin="1311" aria-valuemax="1910" aria-valuenow="1311"></canvas>
+  <p class="scrub__hint" id="hint">DRAG</p>
 </footer>
 
-<div class="panel panel--detail" id="detail" hidden>
+<!-- Author and source. Dim to the point of near-absence until pointed at: this
+     corner is the only place the interface is allowed to mention itself. -->
+<nav class="credit" aria-label="Author and source">
+  <a class="credit__link" href="https://x.com/userluke_" target="_blank" rel="me noopener"
+     title="@userluke_ on X" aria-label="@userluke_ on X">
+    <svg viewBox="0 0 1200 1227" aria-hidden="true" focusable="false"><path fill="currentColor" d="M714.163 519.284 1160.89 0h-105.86L667.137 450.887 357.328 0H0l468.492 681.821L0 1227.01h105.866l409.625-476.792 327.181 476.792H1200L714.137 519.284h.026ZM569.165 687.828l-47.468-67.894L144.011 79.694h162.604l304.797 435.723 47.468 67.894 396.2 566.721H892.476L569.165 687.854v-.026Z"/></svg>
+  </a>
+  <a class="credit__link" href="https://github.com/userman12/chromatica" target="_blank" rel="noopener"
+     title="Source on GitHub" aria-label="Source on GitHub">
+    <svg viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path fill="currentColor" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82a5.9 5.9 0 0 1 2-.27c.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8Z"/></svg>
+  </a>
+  <button class="info" id="btnInfo" title="About">?</button>
+</nav>
+
+<!-- Optional second layer. The field is complete without ever opening this. -->
+<aside class="panel panel--detail" id="detail" hidden>
   <button class="panel__close" id="detailClose" aria-label="Close">×</button>
   <div class="panel__body">
-    <figure class="panel__figure">
-      <img id="detailImg" alt="" decoding="async">
-    </figure>
+    <figure class="panel__figure"><img id="detailImg" alt="" decoding="async"></figure>
     <div class="panel__meta">
-      <span class="panel__eyebrow">TECHNICAL SHEET</span>
+      <span class="panel__eyebrow">SOURCE OF THIS PARTICLE</span>
       <h2 id="detailTitle"></h2>
       <p class="panel__artist" id="detailArtist"></p>
+      <ul class="swatches" id="detailSwatches"></ul>
       <dl class="panel__rows">
         <div><dt>DATED</dt><dd id="detailYear"></dd></div>
         <div><dt>SCHOOL</dt><dd id="detailNat"></dd></div>
-        <div><dt>CENTURY</dt><dd id="detailCentury"></dd></div>
-        <div><dt>OBJECT</dt><dd id="detailId"></dd></div>
+        <div><dt>MET ID</dt><dd id="detailId"></dd></div>
         <div><dt>PALETTE</dt><dd id="detailPalette"></dd></div>
       </dl>
-      <span class="panel__eyebrow">EXTRACTED COLOURS / ORDERED BY PIXEL SHARE</span>
-      <ul class="swatches" id="detailSwatches"></ul>
-      <a id="detailLink" href="#" target="_blank" rel="noopener noreferrer">VIEW AT THE MET ↗</a>
+      <a id="detailLink" href="#" target="_blank" rel="noopener">OPEN AT THE MET ↗</a>
     </div>
   </div>
-</div>
+</aside>
 
-<div class="panel panel--about" id="about" hidden>
+<aside class="panel panel--about" id="about" hidden>
   <button class="panel__close" id="aboutClose" aria-label="Close">×</button>
   <div class="about__body">
     <h2>CHROMATICA</h2>
-    <p>Every cell on this page is a real colour, extracted by k-means clustering
-       from the photograph of a real painting. Nothing here is decorative: no
-       colour has been chosen, corrected, or invented. Click any cell to see the
-       work it came from.</p>
-    <h3>HOW TO READ IT</h3>
-    <p>It is set as a page of text. Every colour is a letter, every painting is a
-       word, every century is a paragraph — and the reading order <em>is</em> the
-       chronology: earliest at the top left, latest at the bottom right. A word is
-       never broken across a line, which is why the right edge is ragged.</p>
-    <p>The year each line opens with is printed in the margin, and the first line
-       of every century is lit. Scroll or drag to read on; the arrow keys step from
-       one painting to the next in date order; the strip at the very bottom is the
-       whole span, and clicking it jumps to a year.</p>
+    <p id="aboutSource"></p>
+
+    <h3>WHAT YOU ARE LOOKING AT</h3>
+    <p>Every particle is one real colour, extracted by k-means clustering from the
+      photograph of one real painting. Nothing here is decorative: no colour has
+      been chosen, corrected, or invented. There are no cells, rows or columns —
+      only colour against black.</p>
+
+    <h3>WHY A COLOUR SITS WHERE IT SITS</h3>
+    <p>Position is the CIE L*a*b* chromatic plane itself: a* runs left to right,
+      b* runs bottom to top. Neutrals fall in the middle, saturated colours reach
+      the rim, hue runs around as angle. Colours that look alike land near each
+      other because that is what the space means. The regions in the cloud are not
+      drawn — they are what the measurement does on its own.</p>
+    <p>Lightness is given no axis on purpose. Against near-black it is already
+      visible as the particle's own brightness, and inventing a direction for it
+      would put a made-up axis into a picture whose whole claim is that no axis is
+      made up. A dim cloud is a dark century.</p>
+
+    <h3>DENSITY</h3>
+    <p>A particle is pushed out from its exact colour coordinate in proportion to
+      how much of the period's measured colour falls in that part of the plane. So
+      a heavily used region swells and thickens, and a rare one stays a few sparks.
+      Area and solidity are the statistic; it is share within the period, not raw
+      count, so scrubbing changes the shape of the cloud instead of merely
+      inflating it wherever the museum owns more paintings. Particle size follows
+      the cluster's share of its own painting, largest first.</p>
+
+    <h3>THE YEAR</h3>
+    <p>The scrubber weights every painting by how far its date is from the year you
+      are on, so the field is a moving window rather than a bin. The window widens
+      where the collection thins: coverage swings about sixtyfold between decades,
+      and three paintings is not a period's palette, it is three paintings. The
+      track under the year shows works per year, so the thin stretches stay
+      visible instead of being flattened. This is a survey of one museum's
+      public-domain holdings, not of art history.</p>
+
+    <h3>THE EDGE AT 1910</h3>
+    <p>The field stops around 1910, and it stops rather than looping. That is a
+      copyright boundary, not an aesthetic one: paintings after it are almost never
+      in the public domain, so the twentieth century cannot be shown honestly here.</p>
+
     <h3>METHOD</h3>
     <ul id="aboutMethod"></ul>
-    <h3>WHAT THE AXIS MEANS</h3>
-    <p>Position is time and nothing else. Nothing is sorted by colour, grouped by
-       hue, or ordered by any derived measure: the colours inside a painting stay
-       in the order the extraction produced them, largest pixel share first, and
-       the paintings stay in date order.</p>
-    <p>The axis is ordinal rather than linear. A line holds as many paintings as
-       fit, so a line may cover thirty years where the collection is thin and a
-       single year where it is dense — coverage varies about sixtyfold between
-       decades. The margin carries the real year of every line, and the strip at
-       the bottom reports works per year on a linear axis, so the unevenness stays
-       visible instead of being flattened by the layout. This is a survey of one
-       museum's public-domain holdings, not of art history.</p>
-    <p>The page stops around 1910, and it stops rather than looping. That is a
-       copyright boundary, not an aesthetic one: paintings after it are almost
-       never in the public domain, so the twentieth century cannot be shown
-       honestly here.</p>
+
     <h3>SOURCE</h3>
-    <p id="aboutSource"></p>
     <p>Images and metadata: The Metropolitan Museum of Art Open Access
-       (CC0 1.0). Attribution is provided on every work.</p>
+      (CC0 1.0). Attribution is provided on every work. Click a particle to see
+      the painting it was measured from.</p>
+    <p>Built by <a href="https://x.com/userluke_" target="_blank" rel="me noopener">@userluke_</a> ·
+      <a href="https://github.com/userman12/chromatica" target="_blank" rel="noopener">source on GitHub ↗</a></p>
   </div>
-</div>
+</aside>
 
 <script type="module" src="js/main.js"></script>
 </body>
