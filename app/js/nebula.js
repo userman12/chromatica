@@ -58,7 +58,7 @@ const CORE_ALPHA = 0.52;
    invisible, not spread across the shadows generally. */
 const MAT_L = 24;
 const MAT_SPREAD = 1.55;   // between core and skirt, so it reads as an aureole
-const MAT_ALPHA = 0.15;
+const MAT_ALPHA = 0.09;
 const MAT_GLOW = 0.5;      // the mat is softer in the blur bed than on the surface
 
 export class Nebula {
