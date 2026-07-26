@@ -16,7 +16,7 @@
   --text-bright: #c8d2cb;
   --mono: "JetBrains Mono", "IBM Plex Mono", ui-monospace, SFMono-Regular,
           Menlo, Consolas, monospace;
-  --hud-h: 46px;
+  --hud-h: 62px;
   --foot-h: 96px;
 }
 
@@ -63,9 +63,11 @@ body { display: flex; flex-direction: column; }
   z-index: 20;
 }
 .hud--top {
-  height: var(--hud-h);
+  /* A floor, not a height: the blurb wraps differently at every width and the bar
+     has to grow with it rather than crop the title off the top. */
+  min-height: var(--hud-h);
   display: flex; align-items: center; gap: 20px;
-  padding: 0 14px;
+  padding: 7px 14px;
 }
 .hud--bottom {
   border-bottom: none; border-top: 1px solid var(--line);
@@ -78,11 +80,19 @@ body { display: flex; flex-direction: column; }
   color: var(--text-bright); font-weight: 700;
   letter-spacing: .34em; font-size: 12px;
 }
-.hud__sub { letter-spacing: .16em; font-size: 9px; color: #4a504c; }
+/* The one piece of prose in the interface. Wider than the labels around it and a
+   shade brighter, so it reads as a sentence rather than as another readout. */
+.hud__blurb {
+  font-size: 9px; line-height: 1.6; letter-spacing: .05em;
+  color: #7d857f; max-width: 64ch;
+}
+.hud__blurb span { display: block; color: #575e59; }
+.hud__sub { letter-spacing: .16em; font-size: 9px; color: #4a504c; margin-top: 2px; }
 
 .readout { display: flex; gap: 20px; margin: 0; }
 .readout > div { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; }
 .readout dt { font-size: 8px; letter-spacing: .16em; color: #4a504c; }
+.readout dt, .readout dd, .hud__sub { white-space: nowrap; }
 .readout dd { margin: 0; color: var(--text-bright); font-size: 12px; font-weight: 500; }
 
 /* Author and source: same weight as the readout, lit only when pointed at. */
@@ -257,9 +267,12 @@ button[aria-pressed="true"] {
 .about__body li::marker { color: #3c423e; }
 
 @media (max-width: 720px) {
-  :root { --foot-h: 116px; }
+  :root { --foot-h: 116px; --hud-h: 58px; }
   .readout > div:nth-child(n+3) { display: none; }
   .hud__sub, .stage__hint, .cursor__range { display: none; }
+  /* Room for one line of prose, not two. */
+  .hud__blurb { font-size: 8px; max-width: 40ch; }
+  .hud__blurb span { display: none; }
   .timeline__label { display: none; }
   .filter { margin-left: 0; }
   .panel, .panel--detail { right: 7px; left: 7px; width: auto; }
