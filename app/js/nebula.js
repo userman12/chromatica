@@ -16,6 +16,25 @@
  *
  * Nothing here strokes, outlines, or tints a particle. The only accent-coloured
  * mark on the surface is the ring around a selected one.
+ *
+ * The one exception, and why: the ground is #0a0a0a, which is L* 2.7, and 2,353
+ * of the 32,438 measured colours are below L* 10 — 932 of them below L* 5, some
+ * of them literally #000000. Those are real measurements, mostly the grounds of
+ * Caravaggio-descended painting and the burnt browns of old varnish, and they
+ * were disappearing into the panel. Two things are done about it, both keyed
+ * only to the colour's own lightness, so a colour is never altered on account of
+ * anything but how dark it is:
+ *
+ *  - Its opacity is raised toward 1. This makes it *more* faithful, not less: at
+ *    alpha 0.52 over a near-black panel, what lands on screen is a blend of the
+ *    measurement and the background. At alpha 1 it is the measurement.
+ *  - It gets a neutral mat underneath, slightly wider than the core, so it reads
+ *    as a dark thing on a lifted ground rather than as a hole. The mat is white
+ *    at low alpha — colourless by construction, so it cannot imply a hue that
+ *    was not measured, and it shows as an aureole around the colour instead of
+ *    passing through it.
+ *
+ * Above MAT_L both effects are zero and nothing about the field has changed.
  */
 
 const ACCENT = "#00ff9d";
@@ -31,6 +50,16 @@ const HALO_SPREAD = 2.0;
 const HALO_ALPHA = 0.11;
 const CORE_SPREAD = 0.9;
 const CORE_ALPHA = 0.52;
+/* Below this lightness a colour starts to lose the panel. L* 24 is where the
+   quadratic falloff below first becomes visible at all (lift 0.16 at L* 15, the
+   13th percentile) and where it reaches its full strength only at true black.
+   28% of the colours are under L* 24, but 3/4 of them are touched by less than a
+   fifth of the effect: the correction is aimed at the 2.9% that were actually
+   invisible, not spread across the shadows generally. */
+const MAT_L = 24;
+const MAT_SPREAD = 1.55;   // between core and skirt, so it reads as an aureole
+const MAT_ALPHA = 0.15;
+const MAT_GLOW = 0.5;      // the mat is softer in the blur bed than on the surface
 
 export class Nebula {
   constructor(canvas) {
@@ -54,6 +83,34 @@ export class Nebula {
     this.scan = this.ctx.createPattern(tile, "repeat");
   }
 
+  /**
+   * Per-particle "how much ground is this one losing", 0 for anything at or above
+   * MAT_L and 1 for black, squared so the onset is gentle and only the genuinely
+   * lost colours get the full correction.
+   *
+   * Built once per field: L* is a property of the measurement and never changes.
+   * field.order is sorted by lightness ascending and never re-sorted, so every
+   * particle needing a mat sits in one contiguous run at the head of it — which
+   * is why the mat can be its own pass with a single fillStyle rather than an
+   * interruption inside the colour-batched loops.
+   */
+  liftFor(field) {
+    if (this._liftSrc === field.lum) return;
+    const lum = field.lum;
+    const lift = new Float32Array(lum.length);
+    let end = 0;
+    for (let k = 0; k < field.n; k++) {
+      const i = field.order[k];
+      if (lum[i] >= MAT_L) break;
+      const t = 1 - lum[i] / MAT_L;
+      lift[i] = t * t;
+      end = k + 1;
+    }
+    this.lift = lift;
+    this.darkEnd = end;
+    this._liftSrc = lum;
+  }
+
   resize(cssW, cssH) {
     this.dpr = Math.min(window.devicePixelRatio || 1, 2);
     this.cssW = cssW; this.cssH = cssH;
@@ -74,12 +131,30 @@ export class Nebula {
   draw(field, selected, intensity = 1) {
     const TAU = Math.PI * 2;
     const { x, y, w, rad, css, order, n } = field;
+    this.liftFor(field);
+    const lift = this.lift, darkEnd = this.darkEnd;
 
     // --- glow bed, low resolution ---
     const g = this.bedCtx;
     g.setTransform(1, 0, 0, 1, 0, 0);
     g.clearRect(0, 0, this.bed.width, this.bed.height);
     const S = GLOW_SCALE;
+
+    // The dark ones' aura goes into the bed first, so it is under everything and
+    // gets the same blur as the rest of the atmosphere. Without it a black
+    // particle contributes nothing to the bed at all and its neighbourhood is
+    // fractionally darker than bare panel — a hole, which is exactly how it read.
+    g.fillStyle = "#ffffff";
+    for (let k = 0; k < darkEnd; k++) {
+      const i = order[k];
+      const wt = w[i];
+      if (wt === 0) continue;
+      g.globalAlpha = wt * lift[i] * MAT_ALPHA * MAT_GLOW * intensity;
+      g.beginPath();
+      g.arc(x[i] * S, y[i] * S, Math.max(0.7, rad[i] * S * GLOW_SPREAD), 0, TAU);
+      g.fill();
+    }
+
     let lastFill = null;
     for (let k = 0; k < n; k++) {
       const i = order[k];
@@ -103,6 +178,18 @@ export class Nebula {
     ctx.imageSmoothingQuality = "high";
     ctx.drawImage(this.bed, 0, 0, this.cssW, this.cssH);
 
+    // --- mats, under the crisp pass and under each other ---
+    ctx.fillStyle = "#ffffff";
+    for (let k = 0; k < darkEnd; k++) {
+      const i = order[k];
+      const wt = w[i];
+      if (wt === 0) continue;
+      ctx.globalAlpha = wt * lift[i] * MAT_ALPHA * intensity;
+      ctx.beginPath();
+      ctx.arc(x[i], y[i], rad[i] * MAT_SPREAD, 0, TAU);
+      ctx.fill();
+    }
+
     // --- crisp pass: skirt, then core ---
     lastFill = null;
     for (let k = 0; k < n; k++) {
@@ -112,11 +199,14 @@ export class Nebula {
       const c = css[i];
       if (c !== lastFill) { ctx.fillStyle = c; lastFill = c; }
       const r = rad[i];
-      ctx.globalAlpha = wt * HALO_ALPHA * intensity;
+      // Opacity runs toward 1 as the colour gets darker, so what lands on the mat
+      // is the measurement rather than a blend of it with whatever is beneath.
+      const solid = k < darkEnd ? lift[i] : 0;
+      ctx.globalAlpha = wt * (HALO_ALPHA + (1 - HALO_ALPHA) * solid * 0.35) * intensity;
       ctx.beginPath();
       ctx.arc(x[i], y[i], r * HALO_SPREAD, 0, TAU);
       ctx.fill();
-      ctx.globalAlpha = wt * CORE_ALPHA * intensity;
+      ctx.globalAlpha = wt * (CORE_ALPHA + (1 - CORE_ALPHA) * solid) * intensity;
       ctx.beginPath();
       ctx.arc(x[i], y[i], r * CORE_SPREAD, 0, TAU);
       ctx.fill();
