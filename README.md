@@ -5,9 +5,11 @@
 Six centuries of painting, reduced to the colours they are actually made of.
 
 Every particle in the field is a real colour, extracted by k-means clustering
-from the photograph of one real painting in the Metropolitan Museum of Art's
-public domain collection. Nothing is decorative: no colour was chosen, corrected
-or invented, and every particle is clickable back to the work it came from.
+from the photograph of one real painting in the open-access collections of the
+Metropolitan Museum of Art, the Art Institute of Chicago, the Cleveland Museum
+of Art and the National Gallery of Art. Nothing is decorative: no colour was
+chosen, corrected or invented, and every particle is clickable back to the work
+it came from, at the museum that holds it.
 
 The whole collection is on screen at once. Switch on the timelapse and the field
 recomposes century by century.
@@ -16,7 +18,7 @@ Built by [@userluke_](https://x.com/userluke_).
 
 ---
 
-## Phase 1 — what the data actually allows
+## Phase 1 — what the Met's data actually allows
 
 Findings that constrained everything downstream. All numbers are measured, not
 assumed.
@@ -106,24 +108,79 @@ collapse into `Other / unattributed`.
   birth/death, and "after Donatello, 1770" entries are correctly dated copies.
 - A photograph's colour is treated as the painting's colour. Museum photography
   is consistent but not colorimetric, and varnish, age and lighting are all in
-  there. This is a survey of one museum's photographs of its public-domain
+  there. This is a survey of four museums' photographs of their public-domain
   holdings — not of art history.
+
+---
+
+## Phase 2 — three more collections
+
+One museum is one museum's taste. The Met alone left the 15th century at a few
+dozen works per bin, so three further open-access collections were added on
+exactly the terms that made the Met usable: CC0, no API key, and a public-domain
+flag in the data that can be trusted without reading a rights page per object.
+
+Every record is keyed by a uid of the form `{source}:{id}` — ids are only
+guaranteed unique inside their own museum — and thumbnails live at
+`app/thumbs/{source}/{id}.webp`. Each source is one module under
+`pipeline/sources/`, exposing `select()` and returning records through one shared
+`make()` that applies the date, medium and year rules identically. Adding a fifth
+collection is one file.
+
+**Art Institute of Chicago** — one Elasticsearch query does the whole selection,
+because their index already knows what is public domain, what is a `Painting` and
+what has an image. Getting the results *out* is the awkward part: the endpoint
+refuses `from + limit > 1000` outright, as an HTTP 403, while the result set is
+~1,800. The date range is therefore split recursively into windows small enough
+to page to the end — disjoint by construction, so nothing is collected twice and
+nothing falls between two windows. Their IIIF server is behind Cloudflare and
+returns a challenge page to an ordinary browser User-Agent; the documented
+`AIC-User-Agent` header is what actually works. Nationality is not a field: it
+lives inside the parenthetical of `artist_display`, and it is the *last*
+semicolon-separated part — reading the first turns `Tintoretto (Jacopo Robusti;
+Italian, 1518–1594)` into a school called "Jacopo Robusti".
+
+**Cleveland** — plain REST, `cc0=1` does the licence filtering. Roughly two
+thirds of their CC0 painting set is Mughal, Chinese, Japanese, Korean and
+Himalayan: this is one of the great Asian collections, and it is excluded for
+exactly the reason the Met's Asian Art department is. Cleveland catalogues by
+`culture` rather than by department, so that boundary has to be written out as a
+vocabulary. They also give a *place* where the other three give a demonym, so
+`Italy` is translated to `Italian` or the school filter would list both. The one
+case a lookup cannot settle is the Low Countries, where the split is temporal
+rather than geographic: Netherlandish before the revolt, Dutch after, with 1580
+as the line the other catalogues use.
+
+**National Gallery of Art** — no API, four bulk CSVs joined locally: images
+filtered to the primary view with `openaccess = 1` (that flag *is* the licence
+signal), objects to `classification = Painting`, and the artist taken from the
+lowest `displayorder` row with `roletype = artist`.
+
+**Overlap** — a work held in more than one catalogue is counted once, matched on
+normalised artist, title and year. Anonymous untitled works are never merged:
+two unrelated `Untitled` panels by `Unattributed` in the same year are two
+paintings, not one.
+
+**One vocabulary from four** — the four museums spell the same school four ways.
+Demonyms are folded (`English`/`Scottish`/`Welsh` → `British`), the National
+Gallery's literal `Other` is emptied rather than becoming a school sitting beside
+`Other / unattributed`, and everything under 25 works collapses into that bucket.
 
 ---
 
 ## Pipeline
 
 Runs offline, once, and emits a static JSON plus thumbnails. **Production never
-touches the Met's servers** — images are fetched and resized exactly once here.
+touches a museum's servers** — images are fetched and resized exactly once here.
 
 ```bash
 python3 -m venv .venv && .venv/bin/pip install pillow numpy scikit-learn
-bash pipeline/00_download_csv.sh      # 317 MB, via the LFS media host
-.venv/bin/python pipeline/01_select.py            # CSV -> 2,862 candidates
-.venv/bin/python pipeline/02_fetch_image_urls.py  # resolve primaryImageSmall
+bash pipeline/00_download_csv.sh      # Met + National Gallery bulk CSVs
+.venv/bin/python pipeline/01_select.py            # all four sources -> 7,499 candidates
+.venv/bin/python pipeline/02_fetch_image_urls.py  # Met only: resolve primaryImageSmall
 .venv/bin/python pipeline/03_palettes.py          # k-means + thumbnails
 .venv/bin/python pipeline/04_build.py             # -> app/data/chromatica.json
-.venv/bin/python pipeline/05_thumbs.py            # thumbnails at THUMB_PX only
+.venv/bin/python pipeline/05_thumbs.py            # thumbnails at THUMB_PX/THUMB_FORMAT
 ```
 
 Stages 02, 03 and 05 append to JSONL and are resumable — re-running skips
@@ -134,8 +191,19 @@ Stage 05 exists because 03 writes thumbnails as a side effect of measuring
 palettes: raising `THUMB_PX` cannot be applied by re-running 03, whose resume log
 skips everything it has already measured, and forcing it would re-run k-means over
 the whole set to rewrite palettes that are already correct. Stage 05 records the
-size each thumbnail was written at, so a size change redoes exactly the stale
-ones and nothing else.
+size *and format* each thumbnail was written at, so changing either redoes
+exactly the stale ones and nothing else.
+
+Thumbnails are **WebP q80, 640 px**, and the format was chosen by measurement
+rather than by reputation. Over 24 works, against the uncompressed LANCZOS
+resize, with 8×8 windowed SSIM: JPEG q74 came out 40.7 KB at mean 0.9477 / worst
+0.9188, and WebP q80 came out 34.6 KB at mean 0.9537 / worst 0.9188. q80 is the
+point where WebP stops losing in the *worst* block rather than merely on average
+— at q76 the worst block drops to 0.9058, so the ~30% saving WebP is usually
+quoted for is not free here. 15% smaller at strictly-no-worse fidelity, across
+7,094 committed files: 290 MB → 247 MB. It was decided before the first large
+commit on purpose, because these files are in git: re-rendering the set later
+would leave both copies in history forever.
 
 Colour extraction runs k-means in **CIE L\*a\*b\*** so clusters are perceptually
 grouped rather than grouped by raw RGB distance, and each cluster is represented
@@ -151,11 +219,14 @@ to disk.
 
 | Stage | Result |
 | --- | --- |
-| 01 select | 2,862 candidates from the CSV |
-| 02 image URLs | 2,856 resolved · 6 without an image · 0 failed |
-| 03 palettes | **2,555 usable** · 243 dropped as greyscale · 14 with no stable palette |
-| 04 build | 2,555 paintings · 11,728 measured colours · 1311–1910 · 420 KB |
-| 05 thumbs | 2,555 rendered · 0 failed · 596–625 px long edge · 111 MB committed |
+| 01 select | **7,499 candidates** · met 2,840 · nga 2,689 · aic 1,179 · cma 791, after cross-source dedup |
+| 02 image URLs | 2,840 resolved from the Met API · the other three carry their URL from selection |
+| 03 palettes | **7,105 usable** · 377 dropped as greyscale · 22 failed to fetch |
+| 04 build | 7,094 paintings · 32,438 measured colours · 1309–1910 · 1.2 MB |
+| 05 thumbs | 7,094 rendered · 0 failed · 596–640 px long edge · 247 MB committed |
+
+Per source in the published field: the Met 2,544, the National Gallery 2,689,
+the Art Institute 1,070, Cleveland 791.
 
 Stage 02 lost 80 works to rate-limit failures on its first pass; re-running the
 script recovered all 80 at the same 4.2 req/s. That is what the append-and-skip
@@ -171,7 +242,7 @@ than by the painter.
 `app/` is plain static files — no bundler, no build step, no dependencies. The
 GitHub Actions workflow uploads the directory as-is.
 
-The 11,728 colours are **particles in a field**, one per (painting, cluster).
+The 32,438 colours are **particles in a field**, one per (painting, cluster).
 There is no grid, no row, no cell and no border inside the field: only colour
 against black. Every control lives in the two HUD bars, never on the surface.
 
@@ -203,8 +274,8 @@ rank within its own painting.
 
 ### Time is a weight, not a position
 
-**The default state is the whole collection at once** — all 2,555 paintings, all
-11,728 colours, 1311 to 1910, every painting weighted the same. That is the
+**The default state is the whole collection at once** — all 7,094 paintings, all
+32,438 colours, 1309 to 1910, every painting weighted the same. That is the
 picture, and it is complete without touching anything.
 
 **The timelapse is a mode you switch on.** It replaces the flat weight with a
@@ -227,16 +298,19 @@ cloud rather than a slab. It touches alpha only; no hue is altered.
 
 ### Rendering
 
-**Canvas 2D**, two passes, flat typed arrays, no per-frame allocation. `step()`
-costs 0.57 ms for all 11,728 particles; the draw is the budget, at ~14 ms for the
-full field and well under that for one window. Headless Chrome at 1440×900, dpr 2:
-**60 fps in both modes.**
+**Canvas 2D**, two passes, flat typed arrays, no per-frame allocation. The
+figures below were measured in headless Chrome at 1440×900, dpr 2, on the
+11,728-particle build: `step()` cost 0.57 ms for the whole field and the draw was
+the budget at ~14 ms, for **60 fps in both modes**. The field is now 32,438
+particles — 2.8× denser — and those numbers have not been re-measured on a real
+browser, so treat them as the design target rather than as the current reading.
+The two optimisations below are what create the headroom for the increase.
 
 Three things had to be fixed to get there, and two of them were not the particles:
 
 - **The readout and the 600-bar strip are only rewritten when a value changes.**
   Repainting four text nodes and 600 `fillRect`s every frame cost more than all
-  11,728 particles did.
+  11,728 particles of the earlier build did.
 - **Canvas 2D is retained, so a frame in which nothing moved needs no draw call.**
   Once the whole collection has settled, the only motion left is the idle
   breathing — about 0.03 px per frame. `step()` reports the largest distance any
@@ -246,9 +320,8 @@ Three things had to be fixed to get there, and two of them were not the particle
   reweights every particle on every frame, so there it always redraws.
 - A global alpha scale, as above, so the eightfold denser default is still a cloud.
 
-Colour is the one thing not optimised. 10,974 of the 11,728 particles are a
-distinct hex, so `fillStyle` is re-parsed for nearly every particle — about 3.4 ms
-per frame. Quantising the palette would collapse that to a few hundred parses, and
+Colour is the one thing not optimised. 29,984 of the 32,438 particles are a
+distinct hex, so `fillStyle` is re-parsed for nearly every particle. Quantising the palette would collapse that to a few hundred parses, and
 would also mean the colours on screen are no longer the colours that were measured.
 It stays.
 
@@ -278,12 +351,12 @@ It stays.
 ### The optional second layer
 
 Clicking a particle opens the painting it was measured from at 300 CSS px beside a
-technical sheet: date, school, object id, how many of the five requested clusters
-survived the 4% floor, and the palette with hex values, the clicked one marked.
-Thumbnails are committed to the repo (stage 05) and land at 596–625 px on the long
-edge, median 624 — the target is set above the Met's web-size ceiling on purpose,
-so nothing is upscaled and nothing is discarded. The browser never requests an
-image from the Met. Hovering names the work and prints the hex under the cursor.
+technical sheet: date, school, the museum that holds it, its catalogue id, how
+many of the five requested clusters survived the 4% floor, and the palette with
+hex values, the clicked one marked. Thumbnails are committed to the repo (stage
+05) and land at 596–640 px on the long edge — the target is set above what the
+sources actually carry, so nothing is upscaled and nothing is discarded. The
+browser never requests an image from a museum. Hovering names the work and prints the hex under the cursor.
 A school filter narrows the field to one tradition's own colour rather than
 averaging it into everyone else's. Keyboard, in the timelapse: arrows ±1 year,
 Shift ±10, PageUp/Down ±50, Home/End, space plays and pauses; Escape closes a
@@ -291,16 +364,30 @@ panel. `?y=1600` deep-links straight into the timelapse at a year, paused.
 
 ### What the field actually shows
 
-Worth recording because it contradicts the obvious story. Weighted the same way
-the app weights them, the **late Middle Ages are the most chromatic period in this
-collection** — mean chroma 25.9 around 1340, which is gold ground, vermilion and
-ultramarine, not mud. The darkest and least saturated stretch is the **Baroque,
-~1600–1620** (mean L\* 29.5, mean chroma 14.9): tenebrism, not archaism. 1905 is
-the brightest (mean L\* 41.6). The visualisation was not tuned to make the
-expected narrative come out.
+Worth recording because it contradicts the obvious story, and worth re-measuring
+after the collection nearly tripled: it survived. Weighted the same way the app
+weights them, the **late Middle Ages are still the most chromatic period here** —
+mean chroma 25.4 around 1340, which is gold ground, vermilion and ultramarine,
+not mud. Saturation then falls for three centuries without interruption. The
+darkest and least saturated stretch is the **later Baroque, ~1660–1680** (mean
+L\* 32.4, mean chroma 14.8): tenebrism, not archaism. Only after 1700 does either
+curve turn back up, and neither recovers its 14th-century value before the field
+ends — 1910 is the brightest point in the whole survey (mean L\* 43.5) at a
+chroma of 16.9, two thirds of the 1340 figure.
+
+Three more collections moved the trough about half a century later and shaved
+0.5 off the medieval peak; the shape did not change. The visualisation was not
+tuned to make the expected narrative come out, and adding data was the honest
+test of that.
 
 ## Attribution
 
-Images and metadata: The Metropolitan Museum of Art Open Access, CC0 1.0. Every
-work links back to its page on metmuseum.org — required practice regardless of
-the licence.
+Images and metadata, all CC0 1.0:
+
+- [The Metropolitan Museum of Art Open Access](https://www.metmuseum.org/about-the-met/policies-and-documents/open-access) — 2,544 paintings
+- [National Gallery of Art Open Data](https://github.com/NationalGalleryOfArt/opendata) — 2,689 paintings
+- [Art Institute of Chicago API](https://api.artic.edu/docs/) — 1,070 paintings
+- [Cleveland Museum of Art Open Access](https://openaccess-api.clevelandart.org/) — 791 paintings
+
+Every work links back to its page at the museum that holds it — required practice
+regardless of the licence.

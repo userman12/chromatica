@@ -17,17 +17,34 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import config as C
+from sources import thumb_path
 
-# Met nationality strings are messy ("Italian, Florentine", "British, born
-# Germany"). Keep the leading demonym, which is the reliable part.
+# Nationality strings are messy in every catalogue ("Italian, Florentine",
+# "British, born Germany", "American, 19th century"). Keep the leading demonym,
+# which is the reliable part -- and the part all four museums agree on.
 NATIONALITY_MIN_COUNT = 25
+
+# Four catalogues, four spellings of the same school. Folded to whichever form
+# the largest share of the collection already uses, so the filter offers one
+# entry per school rather than one per museum's house style.
+NATIONALITY_ALIAS = {
+    "English": "British", "Scottish": "British", "Welsh": "British",
+    "Netherlandish/French": "Netherlandish", "Netherlandish / French": "Netherlandish",
+    "Anglo-American": "American", "German American": "American",
+    "Mexico": "Mexican",
+    # The National Gallery writes a literal "Other" where it has no nationality.
+    # Left alone it would become a school called Other sitting next to the
+    # "Other / unattributed" bucket, which is exactly where it belongs instead.
+    "Other": "", "Unknown": "", "Various": "",
+}
 
 
 def normalize_nationality(raw):
     if not raw:
         return ""
     token = re.split(r"[,;(]", raw)[0].strip()
-    token = re.sub(r"\b(born|active|or)\b.*$", "", token, flags=re.I).strip()
+    token = re.sub(r"\b(born|active|or|possibly|probably)\b.*$", "", token, flags=re.I).strip()
+    token = NATIONALITY_ALIAS.get(token, token)
     return token if 2 < len(token) < 24 else ""
 
 
@@ -55,7 +72,7 @@ def build_bins(paintings):
 
 
 def main():
-    selected = {p["id"]: p for p in json.loads(C.SELECTED.read_text())}
+    selected = {p["uid"]: p for p in json.loads(C.SELECTED.read_text())}
 
     palettes = {}
     for line in C.PALETTES.read_text().splitlines():
@@ -63,21 +80,21 @@ def main():
             continue
         rec = json.loads(line)
         if rec.get("colors"):
-            palettes[rec["id"]] = rec["colors"]
+            palettes[rec["uid"]] = rec["colors"]
 
     # Keep only paintings that have both a palette and a thumbnail on disk.
     usable = []
     missing_thumb = 0
-    for oid, colors in palettes.items():
-        if oid not in selected:
+    for uid, colors in palettes.items():
+        if uid not in selected:
             continue
-        if not (C.THUMBS / f"{oid}.jpg").exists():
+        if not thumb_path(uid).exists():
             missing_thumb += 1
             continue
-        rec = dict(selected[oid])
+        rec = dict(selected[uid])
         rec["colors"] = colors
         usable.append(rec)
-    usable.sort(key=lambda r: (r["year"], r["id"]))
+    usable.sort(key=lambda r: (r["year"], r["src"], r["id"]))
 
     print(f"selected {len(selected)} | with palette {len(palettes)} | "
           f"missing thumb {missing_thumb} | usable {len(usable)}")
@@ -97,6 +114,11 @@ def main():
     other_idx = len(vocab)
     vocab_out = vocab + ["Other / unattributed"]
 
+    # Only sources that actually survived to publication are listed, so the
+    # about panel never credits a museum that contributed nothing.
+    present = [k for k in C.SOURCE_ORDER if any(r["src"] == k for r in usable)]
+    src_index = {k: i for i, k in enumerate(present)}
+
     bins = build_bins(usable)
     out_paintings = []
     out_bins = []
@@ -105,6 +127,7 @@ def main():
         for rec in b["items"]:
             out_paintings.append({
                 "i": rec["id"],
+                "c": src_index[rec["src"]],
                 "t": rec["title"][:140],
                 "a": rec["artist"][:90],
                 "y": rec["year"],
@@ -121,19 +144,27 @@ def main():
     payload = {
         "meta": {
             "generatedAt": datetime.date.today().isoformat(),
-            "source": "The Metropolitan Museum of Art Open Access (CC0)",
             "sourceCsvSnapshot": "2026-07-25",
+            # The app reads `c` on each painting as an index into this list: it
+            # is where the thumbnail path, the outbound link and the credit all
+            # come from, so order here is load-bearing.
+            "sources": [{"key": k, **C.SOURCES[k],
+                         "n": sum(1 for r in usable if r["src"] == k)}
+                        for k in present],
             "totalPaintings": len(out_paintings),
             "totalCells": total_cells,
             "bins": len(out_bins),
             "yearRange": [out_bins[0]["s"], out_bins[-1]["e"]],
             "nationalities": vocab_out,
             "notes": {
-                "date": "year = midpoint of objectBeginDate/objectEndDate, span <= 25y",
-                "excluded": "portrait miniatures on ivory; Asian and Islamic Art departments",
+                "date": "year = midpoint of the catalogued begin/end date, span <= 25y",
+                "excluded": "portrait miniatures on ivory; Asian and Islamic "
+                            "traditions; works held by more than one of these "
+                            "collections are counted once",
                 "palette": "k-means k=5 in CIE L*a*b*, clusters <4% dropped, near-duplicates merged",
-                "movement": "the Met exposes no clean artistic-movement field; "
-                            "artist nationality is used as a proxy",
+                "movement": "none of these catalogues exposes a clean "
+                            "artistic-movement field; artist nationality is "
+                            "used as a proxy",
             },
         },
         "bins": out_bins,
@@ -145,6 +176,9 @@ def main():
     size_kb = C.OUT_JSON.stat().st_size / 1024
 
     print(f"\nbins {len(out_bins)} | paintings {len(out_paintings)} | cells {total_cells}")
+    for key in present:
+        n = sum(1 for r in usable if r["src"] == key)
+        print(f"  {key:<5} {C.SOURCES[key]['short']:<24} {n:>6,}")
     print(f"wrote {C.OUT_JSON.relative_to(C.ROOT)}  {size_kb:.0f} KB")
     print(f"nationalities: {', '.join(vocab_out)}")
     print("\nbin spans:")

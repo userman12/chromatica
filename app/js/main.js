@@ -21,7 +21,6 @@
 import { Field } from "./field.js";
 import { Nebula } from "./nebula.js";
 
-const MET_URL = "https://www.metmuseum.org/art/collection/search/";
 const PLAY_YEARS_PER_SEC = 7.5;   // the timelapse crawl
 const SCRUB_SLOP = 4;             // px of movement still counted as a click
 const STAGE_GAIN = 1.35;          // years per px when dragging on the field itself
@@ -53,6 +52,8 @@ const el = {
   detail: $("detail"), detailClose: $("detailClose"), detailImg: $("detailImg"),
   detailTitle: $("detailTitle"), detailArtist: $("detailArtist"),
   detailYear: $("detailYear"), detailNat: $("detailNat"), detailId: $("detailId"),
+  detailSource: $("detailSource"), aboutSources: $("aboutSources"),
+  hudBlurbScope: $("hudBlurbScope"),
   detailPalette: $("detailPalette"), detailSwatches: $("detailSwatches"),
   detailLink: $("detailLink"),
 };
@@ -449,12 +450,17 @@ function showDetail(particle) {
   // would otherwise fade out from under the panel.
   setPlaying(false);
 
-  el.detailImg.src = `thumbs/${p.i}.jpg`;
+  // `c` indexes meta.sources: the thumbnail path, the outbound link and the
+  // credit line all come from there, because four catalogues number their own
+  // objects independently and an id alone no longer identifies anything.
+  const src = state.data.meta.sources[p.c];
+  el.detailImg.src = `thumbs/${src.key}/${p.i}.webp`;
   el.detailImg.alt = p.t || "Untitled";
   el.detailTitle.textContent = p.t || "Untitled";
   el.detailArtist.textContent = p.a || "Unattributed";
   el.detailYear.textContent = span(p.s, p.e);
   el.detailNat.textContent = state.data.meta.nationalities[p.n] || "—";
+  el.detailSource.textContent = src.name;
   el.detailId.textContent = p.i;
   // k-means runs with k=5; clusters under 4% of pixels are dropped, so a shorter
   // palette is a real statement about the painting, not a failure.
@@ -466,7 +472,8 @@ function showDetail(particle) {
   el.detailSwatches.innerHTML = p.k.map((h) =>
     `<li class="${h === thisHex ? "is-this" : ""}"><i style="background:${h}"></i>`
     + `<code>${h.toUpperCase()}</code></li>`).join("");
-  el.detailLink.href = MET_URL + p.i;
+  el.detailLink.href = src.url.replace("{}", encodeURIComponent(p.i));
+  el.detailLink.textContent = `OPEN AT ${src.short} ↗`;
   el.detail.hidden = false;
 }
 
@@ -487,8 +494,24 @@ function fillAbout(meta) {
     .map((note) => `<li>${escapeHtml(note)}</li>`).join("");
   el.aboutSource.textContent =
     `${num(meta.totalPaintings)} paintings, ${num(meta.totalCells)} extracted colours, `
-    + `${meta.yearRange[0]}–${meta.yearRange[1]}. `
-    + `Built from the Met Open Access dataset snapshot of ${meta.sourceCsvSnapshot}.`;
+    + `${meta.yearRange[0]}–${meta.yearRange[1]}, from `
+    + `${meta.sources.length} open-access collections. `
+    + `Built ${meta.generatedAt}.`;
+  // Each museum is credited by name, with its licence and how much of the field
+  // is actually its: the counts are the attribution being specific.
+  el.aboutSources.innerHTML = meta.sources.map((s) =>
+    `<li><a href="${escapeHtml(s.site)}" target="_blank" rel="noopener">`
+    + `${escapeHtml(s.name)} ↗</a> — ${escapeHtml(s.licence)}, `
+    + `${num(s.n)} paintings</li>`).join("");
+}
+
+/** The blurb states the size of the thing, so it is read off the thing. */
+function fillBlurb(meta) {
+  if (!el.hudBlurbScope) return;
+  el.hudBlurbScope.textContent =
+    `EVERY COLOUR MEASURED IN ${num(meta.totalPaintings)} PAINTINGS, `
+    + `${meta.yearRange[0]}–${meta.yearRange[1]}, ACROSS `
+    + `${meta.sources.length} OPEN-ACCESS COLLECTIONS.`;
 }
 
 /** Schools, most represented first, with their counts: the filter states its own bias. */
@@ -533,6 +556,7 @@ async function init() {
   el.timeline.setAttribute("aria-valuemin", state.field.y0);
   el.timeline.setAttribute("aria-valuemax", state.field.y1);
   fillAbout(data.meta);
+  fillBlurb(data.meta);
   fillFilter(data);
   measure();
   bindInput();

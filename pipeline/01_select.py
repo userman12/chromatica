@@ -1,109 +1,88 @@
-"""Stage 1 — select eligible paintings from the Met Open Access CSV.
+"""Stage 1 — select eligible paintings from every open-access collection.
 
-Reads the CSV snapshot and applies the Phase 1 filters. No network calls, no
-images. Output: data/selected.json
+Each source has its own adapter under pipeline/sources/; this stage only runs
+them, applies the rules that are about the dataset as a whole rather than about
+one museum, and writes the union.
+
+The one cross-source rule is de-duplication by (artist, title, year). Museums do
+occasionally hold the same composition, and more often the same artist repeated
+a subject with the same title in the same year. Neither case should be counted
+twice, so the earliest source in SOURCE_ORDER keeps it.
+
+Output: data/selected.json
 """
-import csv
-import json
-import sys
+import argparse
 import collections
+import json
+import re
+import sys
+from pathlib import Path
 
-sys.path.insert(0, str(__import__("pathlib").Path(__file__).resolve().parent))
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 import config as C
-
-csv.field_size_limit(10**9)
-
-
-def is_painting(row):
-    """The Met leaves Classification empty for all American Wing paintings, so
-    Object Name has to be checked too."""
-    return ("painting" in row["Classification"].lower()
-            or "painting" in row["Object Name"].lower())
+import sources
 
 
-def first_int(value):
-    try:
-        return int(value.split("|")[0].strip())
-    except (ValueError, AttributeError):
+def dedup_key(rec):
+    """Loose match on artist + title + year. Punctuation and case vary between
+    catalogues ("St." vs "Saint", trailing dates), so both strings are reduced
+    to their letters before comparison.
+
+    Returns None -- meaning "never a duplicate" -- for anonymous untitled work.
+    Two unrelated panels can both be an Unattributed Untitled of 1650, and
+    collapsing those would throw away real paintings to prevent an imaginary
+    double count."""
+    if rec["title"] == "Untitled" or rec["artist"] == "Unattributed":
         return None
+    flat = lambda s: re.sub(r"[^a-z0-9]+", "", s.lower())
+    return flat(rec["artist"]), flat(rec["title"]), rec["year"]
 
 
 def main():
-    if not C.CSV_PATH.exists():
-        sys.exit(f"missing {C.CSV_PATH}\nDownload it with:\n  "
-                 f"curl -L -o {C.CSV_PATH} '{C.CSV_URL}'")
+    ap = argparse.ArgumentParser(description=__doc__)
+    ap.add_argument("--only", nargs="*", choices=C.SOURCE_ORDER,
+                    help="run just these sources (default: all)")
+    args = ap.parse_args()
+    keys = args.only or list(C.SOURCE_ORDER)
 
-    stats = collections.Counter()
-    selected = []
+    all_stats = {}
+    records = []
+    for key in keys:
+        stats = collections.Counter()
+        print(f"\n=== {key}  {C.SOURCES[key]['name']}", flush=True)
+        got = sources.load(key).select(stats)
+        all_stats[key] = stats
+        for name, value in stats.most_common():
+            print(f"  {name:<24} {value:>8,}")
+        print(f"  {'selected':<24} {len(got):>8,}")
+        records.extend(got)
 
-    with open(C.CSV_PATH, newline="", encoding="utf-8-sig") as fh:
-        for row in csv.DictReader(fh):
-            stats["rows"] += 1
-            if row["Is Public Domain"].strip().lower() != "true":
-                continue
-            stats["public_domain"] += 1
-            if not is_painting(row):
-                continue
-            stats["painting"] += 1
-            if row["Department"] not in C.DEPARTMENTS:
-                stats["drop_department"] += 1
-                continue
-            medium = row["Medium"].lower()
-            if any(x in medium for x in C.EXCLUDE_MEDIUM):
-                stats["drop_medium"] += 1
-                continue
-            try:
-                begin = int(row["Object Begin Date"])
-                end = int(row["Object End Date"])
-            except ValueError:
-                stats["drop_unparseable_date"] += 1
-                continue
-            if end < begin:
-                begin, end = end, begin
-            span = end - begin
-            if span > C.MAX_DATE_SPAN:
-                stats["drop_wide_span"] += 1
-                continue
-            year = (begin + end) // 2
-            if not (C.YEAR_MIN <= year <= C.YEAR_MAX):
-                stats["drop_year_range"] += 1
-                continue
+    seen, kept, dropped = {}, [], collections.Counter()
+    order = {k: i for i, k in enumerate(C.SOURCE_ORDER)}
+    records.sort(key=lambda r: (order[r["src"]], r["year"], r["id"]))
+    for rec in records:
+        key = dedup_key(rec)
+        if key is not None and key in seen:
+            dropped[f"{rec['src']}<-{seen[key]}"] += 1
+            continue
+        seen[key] = rec["src"]
+        kept.append(rec)
 
-            # Sanity check against the artist's lifespan. The Met has genuine
-            # errors here (a Durer dated 1900-1999). Only reject clear-cut
-            # cases: Artist Begin/End Date sometimes holds *active* dates
-            # rather than birth/death, so a tight check would over-reject.
-            a_begin, a_end = first_int(row["Artist Begin Date"]), first_int(row["Artist End Date"])
-            if a_begin and a_end and a_end > a_begin and (begin > a_end + 60 or end < a_begin):
-                stats["drop_artist_mismatch"] += 1
-                continue
-
-            selected.append({
-                "id": int(row["Object ID"]),
-                "title": row["Title"].strip() or "Untitled",
-                "artist": row["Artist Display Name"].split("|")[0].strip() or "Unattributed",
-                "nationality": row["Artist Nationality"].split("|")[0].strip(),
-                "year": year,
-                "yearStart": begin,
-                "yearEnd": end,
-                "dept": row["Department"],
-                "medium": row["Medium"].strip(),
-            })
-            stats["selected"] += 1
-
-    selected.sort(key=lambda r: (r["year"], r["id"]))
+    kept.sort(key=lambda r: (r["year"], r["src"], r["id"]))
     C.DATA.mkdir(parents=True, exist_ok=True)
-    C.SELECTED.write_text(json.dumps(selected, ensure_ascii=False))
+    C.SELECTED.write_text(json.dumps(kept, ensure_ascii=False))
 
-    print(f"rows scanned            {stats['rows']:>8,}")
-    print(f"public domain           {stats['public_domain']:>8,}")
-    print(f"classified as painting  {stats['painting']:>8,}")
-    for key in ("drop_department", "drop_medium", "drop_unparseable_date",
-                "drop_wide_span", "drop_year_range", "drop_artist_mismatch"):
-        print(f"  -{key:<22} {stats[key]:>6,}")
-    print(f"SELECTED                {stats['selected']:>8,}  -> {C.SELECTED.name}")
+    print(f"\n{'-' * 46}")
+    for key in keys:
+        n = sum(1 for r in kept if r["src"] == key)
+        print(f"{key:<6} {C.SOURCES[key]['short']:<24} {n:>7,}")
+    if dropped:
+        print("\ncross-source duplicates dropped:")
+        for pair, n in dropped.most_common():
+            print(f"  {pair:<20} {n:>5}")
+    print(f"\nSELECTED {len(kept):,}  ->  {C.SELECTED.name}")
 
-    per_century = collections.Counter(r["year"] // 100 * 100 for r in selected)
+    per_century = collections.Counter(r["year"] // 100 * 100 for r in kept)
     print("\nper century:")
     for century in sorted(per_century):
         print(f"  {century}s  {per_century[century]:>5}")

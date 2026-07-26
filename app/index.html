@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>CHROMATICA — the colour of six centuries of painting</title>
-<meta name="description" content="Every colour of 2,555 public-domain paintings from The Metropolitan Museum of Art, 1311–1910, floating in the CIE L*a*b* chromatic plane. The whole collection at once, or a timelapse through it.">
+<meta name="description" content="Every colour of thousands of public-domain paintings from four open-access museum collections — the Met, the Art Institute of Chicago, Cleveland and the National Gallery of Art — from 1300 to 1910, placed by date and lightness or in the CIE L*a*b* chromatic plane.">
 <meta name="color-scheme" content="dark">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' fill='%230a0a0a'/%3E%3Ccircle cx='6.5' cy='6' r='3.2' fill='%23c8873c'/%3E%3Ccircle cx='10' cy='10' r='2.6' fill='%235d7f86'/%3E%3C/svg%3E">
 <link rel="stylesheet" href="css/style.css">
@@ -18,9 +18,10 @@
   <div class="hud__brand">
     <span class="hud__title">CHROMATICA</span>
     <!-- What the thing is, in the two lines someone will actually read before
-         they start dragging. Static: it describes the collection, not the mode. -->
+         they start dragging. It describes the collection, not the mode; the
+         first line is filled from the data so the count can never go stale. -->
     <span class="hud__blurb">
-      EVERY COLOUR MEASURED IN 2,555 MET PAINTINGS, 1311&ndash;1910.
+      <span id="hudBlurbScope">EVERY COLOUR MEASURED IN FOUR OPEN-ACCESS COLLECTIONS.</span>
       <span>PLACED BY WHEN IT WAS PAINTED AND HOW LIGHT IT IS.</span>
     </span>
     <span class="hud__sub" id="hudSub">CIE L*a*b* CHROMATIC PLANE · CLICK A PARTICLE FOR ITS PAINTING</span>
@@ -94,10 +95,11 @@
       <dl class="panel__rows">
         <div><dt>DATED</dt><dd id="detailYear"></dd></div>
         <div><dt>SCHOOL</dt><dd id="detailNat"></dd></div>
-        <div><dt>MET ID</dt><dd id="detailId"></dd></div>
+        <div><dt>HELD BY</dt><dd id="detailSource"></dd></div>
+        <div><dt>CATALOGUE ID</dt><dd id="detailId"></dd></div>
         <div><dt>PALETTE</dt><dd id="detailPalette"></dd></div>
       </dl>
-      <a id="detailLink" href="#" target="_blank" rel="noopener">OPEN AT THE MET ↗</a>
+      <a id="detailLink" href="#" target="_blank" rel="noopener">OPEN IN THE CATALOGUE ↗</a>
     </div>
   </div>
 </aside>
@@ -123,7 +125,7 @@
       is L*, its lightness. So the collection is unrolled in time: you can follow a
       colour arriving, spreading and thinning across six centuries instead of
       seeing it piled into a single cloud. The 19th century stands as a wall and
-      the 14th as a few sparks — that is what this museum owns, shown rather than
+      the 14th as a few sparks — that is what these museums own, shown rather than
       evened out into fairness. The strip below the field is the same year axis, so
       the wall stands over its own histogram.</p>
     <p><b>Chromatic plane</b>, the second view. Left to right is a*, bottom to top
@@ -147,14 +149,14 @@
 
     <h3>THE WHOLE SPAN, AND THE TIMELAPSE</h3>
     <p>By default every painting is in the field at once: this is the colour of the
-      whole collection, 1311 to 1910. The timelapse is a second reading, not the
+      whole collection, 1300 to 1910. The timelapse is a second reading, not the
       main one. It weights each painting by how far its date is from the year you
       are on, so the field becomes a moving window rather than a bin, and the
       window widens where the collection thins — coverage swings about sixtyfold
       between decades, and three paintings is not a period's palette, it is three
       paintings. The strip along the bottom shows works per year, so the thin
-      stretches stay visible instead of being flattened. This is a survey of one
-      museum's public-domain holdings, not of art history.</p>
+      stretches stay visible instead of being flattened. This is a survey of what
+      four museums happen to hold and have released, not of art history.</p>
 
     <h3>THE EDGE AT 1910</h3>
     <p>The field stops around 1910, and it stops rather than looping. That is a
@@ -164,10 +166,14 @@
     <h3>METHOD</h3>
     <ul id="aboutMethod"></ul>
 
-    <h3>SOURCE</h3>
-    <p>Images and metadata: The Metropolitan Museum of Art Open Access
-      (CC0 1.0). Attribution is provided on every work. Click a particle to see
-      the painting it was measured from.</p>
+    <h3>SOURCES</h3>
+    <p>Images and metadata come from the open-access programmes of these
+      collections, all of them CC0. Attribution is provided on every work: click
+      a particle to see the painting it was measured from and the museum that
+      holds it.</p>
+    <ul id="aboutSources"></ul>
+    <p>A handful of paintings are held in more than one of these catalogues.
+      Where the artist, title and date agree, the work is counted once.</p>
     <p>Built by <a href="https://x.com/userluke_" target="_blank" rel="me noopener">@userluke_</a> ·
       <a href="https://github.com/userman12/chromatica" target="_blank" rel="noopener">source on GitHub ↗</a></p>
   </div>

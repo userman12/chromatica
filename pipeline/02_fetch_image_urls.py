@@ -1,12 +1,15 @@
-"""Stage 2 — resolve primaryImageSmall for each selected painting.
+"""Stage 2 — resolve an image URL for the paintings that do not carry one.
 
-The Open Access CSV carries no image URL and no has-image flag, so the object
-endpoint has to be hit once per painting. The Met rejects bursts with HTTP 403
-(4 concurrent workers lost 83% of requests during testing), so requests are
-globally paced and retried with exponential backoff.
+In practice this means the Met, and only the Met. The other three collections
+return an image URL in the same response as the metadata, so stage 1 already
+filled it in and there is nothing here for them to do. The Met's Open Access CSV
+carries no image URL and no has-image flag, so its object endpoint has to be hit
+once per painting. It rejects bursts with HTTP 403 (4 concurrent workers lost 83%
+of requests during testing), so requests are globally paced and retried with
+exponential backoff.
 
-Resumable: already-resolved ids are read from data/image_urls.jsonl and skipped.
-Output: data/image_urls.jsonl  {"id":..,"img":..} or {"id":..,"img":null}
+Resumable: already-resolved uids are read from data/image_urls.jsonl and skipped.
+Output: data/image_urls.jsonl  {"uid":..,"img":..} or {"uid":..,"img":null}
 """
 import json
 import sys
@@ -19,6 +22,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import config as C
+from sources import split_uid
 
 _pace_lock = threading.Lock()
 _next_slot = [0.0]
@@ -39,17 +43,18 @@ def paced_get(url, min_interval):
 
 
 def fetch_one(obj):
+    uid = obj["uid"]
+    _, oid = split_uid(uid)
     for attempt in range(C.MAX_RETRIES):
         try:
-            raw = paced_get(C.API_BASE + str(obj["id"]), C.API_MIN_INTERVAL)
-            data = json.loads(raw)
-            return {"id": obj["id"], "img": data.get("primaryImageSmall") or None}
+            data = json.loads(paced_get(C.API_BASE + oid, C.API_MIN_INTERVAL))
+            return {"uid": uid, "img": data.get("primaryImageSmall") or None}
         except urllib.error.HTTPError as err:
             if err.code in (403, 429, 500, 502, 503):
                 time.sleep(2 ** attempt + 0.5)      # 1.5, 2.5, 4.5, 8.5, 16.5
                 continue
             if err.code == 404:
-                return {"id": obj["id"], "img": None}
+                return {"uid": uid, "img": None}
             time.sleep(1.5)
         except Exception:
             time.sleep(2 ** attempt * 0.5)
@@ -58,14 +63,18 @@ def fetch_one(obj):
 
 def main():
     selected = json.loads(C.SELECTED.read_text())
-    done = {}
+    needs_lookup = [o for o in selected if not o.get("img")]
+
+    done = set()
     if C.IMGURLS.exists():
         for line in C.IMGURLS.read_text().splitlines():
             if line.strip():
-                rec = json.loads(line)
-                done[rec["id"]] = rec
-    todo = [o for o in selected if o["id"] not in done]
-    print(f"total {len(selected)} | already resolved {len(done)} | to fetch {len(todo)}",
+                done.add(json.loads(line)["uid"])
+    todo = [o for o in needs_lookup if o["uid"] not in done]
+
+    print(f"selected {len(selected)} | url already in metadata "
+          f"{len(selected) - len(needs_lookup)} | need lookup {len(needs_lookup)} "
+          f"| already resolved {len(needs_lookup) - len(todo)} | to fetch {len(todo)}",
           flush=True)
     if not todo:
         print("nothing to do")

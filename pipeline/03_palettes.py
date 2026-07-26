@@ -11,7 +11,7 @@ of the piece is that the colours read as the painting's real colours. Clusters
 are ordered by pixel share, tiny clusters dropped, near-duplicates merged.
 
 Resumable: paintings already present in data/palettes.jsonl are skipped.
-Output: data/palettes.jsonl + app/thumbs/{id}.jpg
+Output: data/palettes.jsonl + app/thumbs/{src}/{id}.webp
 """
 import io
 import json
@@ -29,6 +29,7 @@ from sklearn.cluster import KMeans
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import config as C
+from sources import headers_for, image_urls, thumb_path
 
 _pace_lock = threading.Lock()
 _next_slot = [0.0]
@@ -42,7 +43,7 @@ def paced_fetch(url):
         _next_slot[0] = max(now, _next_slot[0]) + C.IMG_MIN_INTERVAL
     if wait:
         time.sleep(wait)
-    req = urllib.request.Request(url, headers={"User-Agent": C.USER_AGENT})
+    req = urllib.request.Request(url, headers=headers_for(url))
     with urllib.request.urlopen(req, timeout=90) as resp:
         return resp.read()
 
@@ -155,8 +156,9 @@ def extract_palette(img):
 
 
 def process(rec):
-    oid, url = rec["id"], rec["img"]
-    thumb_path = C.THUMBS / f"{oid}.jpg"
+    uid, url = rec["uid"], rec["img"]
+    thumb = thumb_path(uid)
+    thumb.parent.mkdir(parents=True, exist_ok=True)
     for attempt in range(C.MAX_RETRIES):
         try:
             raw = paced_fetch(url)
@@ -165,45 +167,40 @@ def process(rec):
                 probe = img.copy()
                 probe.thumbnail((120, 120), Image.Resampling.LANCZOS)
                 if mean_chroma(np.asarray(probe)) < C.GRAYSCALE_MAX_CHROMA:
-                    return {"id": oid, "colors": [], "skip": "grayscale"}
+                    return {"uid": uid, "colors": [], "skip": "grayscale"}
                 colors = extract_palette(img)
                 if not colors:
-                    return {"id": oid, "colors": [], "skip": "nocolors"}
-                thumb = img.convert("RGB")
-                thumb.thumbnail((C.THUMB_PX, C.THUMB_PX), Image.Resampling.LANCZOS)
-                thumb.save(thumb_path, "JPEG", quality=C.THUMB_QUALITY,
-                           optimize=True, progressive=True)
-            return {"id": oid, "colors": colors}
+                    return {"uid": uid, "colors": [], "skip": "nocolors"}
+                small = img.convert("RGB")
+                small.thumbnail((C.THUMB_PX, C.THUMB_PX), Image.Resampling.LANCZOS)
+                small.save(thumb, C.THUMB_FORMAT, quality=C.THUMB_QUALITY,
+                           method=C.THUMB_METHOD)
+            return {"uid": uid, "colors": colors}
         except urllib.error.HTTPError as err:
             if err.code in (403, 429, 500, 502, 503):
                 time.sleep(2 ** attempt + 0.5)
                 continue
-            return {"id": oid, "colors": [], "error": f"http{err.code}"}
+            return {"uid": uid, "colors": [], "error": f"http{err.code}"}
         except Exception as exc:
             if attempt == C.MAX_RETRIES - 1:
-                return {"id": oid, "colors": [], "error": type(exc).__name__}
+                return {"uid": uid, "colors": [], "error": type(exc).__name__}
             time.sleep(2 ** attempt * 0.5)
     return None
 
 
 def main():
-    if not C.IMGURLS.exists():
-        sys.exit("run 02_fetch_image_urls.py first")
-    urls = {}
-    for line in C.IMGURLS.read_text().splitlines():
-        if line.strip():
-            rec = json.loads(line)
-            if rec.get("img"):
-                urls[rec["id"]] = rec["img"]
+    if not C.SELECTED.exists():
+        sys.exit("run 01_select.py first")
+    urls = image_urls()
 
     done = set()
     if C.PALETTES.exists():
         for line in C.PALETTES.read_text().splitlines():
             if line.strip():
-                done.add(json.loads(line)["id"])
+                done.add(json.loads(line)["uid"])
 
     C.THUMBS.mkdir(parents=True, exist_ok=True)
-    todo = [{"id": i, "img": u} for i, u in urls.items() if i not in done]
+    todo = [{"uid": u, "img": url} for u, url in urls.items() if u not in done]
     print(f"with image url {len(urls)} | already done {len(done)} | to process {len(todo)}",
           flush=True)
     if not todo:
