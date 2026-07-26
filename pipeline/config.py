@@ -42,8 +42,14 @@ KMEANS_K = 5                            # clusters requested per painting
 PALETTE_MAX = 5                         # colours kept after dedup
 PALETTE_MIN = 3
 ANALYSIS_PX = 160                       # long edge for k-means input
-THUMB_PX = 200                          # long edge for committed thumbnail
-THUMB_QUALITY = 68
+# The detail card shows the work at 300 CSS px, so 600 device px on a retina
+# screen. This is deliberately set just above what the sources carry: across all
+# 2,555 works the long edge came out 596-625 (median 624), so nothing was
+# upscaled and nothing was thrown away -- thumbnail() only ever shrinks. Raising
+# this further would change nothing; the Met's web-size ceiling is the real limit.
+THUMB_PX = 640                          # long edge for committed thumbnail
+THUMB_QUALITY = 74                      # raised with the size: it is now viewed large
+THUMBS_LOG = DATA / "thumbs.jsonl"      # resumable append log for 05_thumbs.py
 MIN_CLUSTER_SHARE = 0.04                # drop clusters below 4% of pixels
 DEDUP_DISTANCE = 26                     # euclidean RGB distance for dedup
 

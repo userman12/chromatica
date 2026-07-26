@@ -4,7 +4,7 @@
 
 Six centuries of painting, reduced to the colours they are actually made of.
 
-Every cell in the field is a real colour, extracted by k-means clustering from
+Every cell on the tape is a real colour, extracted by k-means clustering from
 the photograph of one real painting in the Metropolitan Museum of Art's public
 domain collection. Nothing is decorative: no colour was chosen, corrected or
 invented, and every cell is clickable back to the work it came from.
@@ -55,12 +55,12 @@ land inside the requested 2,000–3,000 sample, so nothing is sampled away.
 Density varies ~60× between decades (4 works in the 1350s, 245 in the 1870s).
 Fixed decade columns would therefore produce mostly empty ones, so the axis is
 **ordinal with adaptive bins** of ~60 works each; each column reports its real
-span, and the density strip reports works *per year* so the unevenness stays
+span, and the overview strip reports works *per year* so the unevenness stays
 visible instead of being hidden by the layout.
 
 **The twentieth century cannot be shown.** Public domain effectively ends around
 1910 — "Modern and Contemporary Art" contributes only 14 public-domain paintings.
-The field stops at a copyright boundary, and the interface says so rather than
+The tape stops at a copyright boundary, and the interface says so rather than
 implying art history stopped there.
 
 ### There is no usable "artistic movement" field
@@ -115,10 +115,19 @@ bash pipeline/00_download_csv.sh      # 317 MB, via the LFS media host
 .venv/bin/python pipeline/02_fetch_image_urls.py  # resolve primaryImageSmall
 .venv/bin/python pipeline/03_palettes.py          # k-means + thumbnails
 .venv/bin/python pipeline/04_build.py             # -> app/data/chromatica.json
+.venv/bin/python pipeline/05_thumbs.py            # thumbnails at THUMB_PX only
 ```
 
-Stages 02 and 03 append to JSONL and are resumable — re-running skips finished
-IDs, which matters because 02 takes ~40 minutes at the rate the API permits.
+Stages 02, 03 and 05 append to JSONL and are resumable — re-running skips
+finished IDs, which matters because 02 takes ~40 minutes at the rate the API
+permits.
+
+Stage 05 exists because 03 writes thumbnails as a side effect of measuring
+palettes: raising `THUMB_PX` cannot be applied by re-running 03, whose resume log
+skips everything it has already measured, and forcing it would re-run k-means over
+the whole set to rewrite palettes that are already correct. Stage 05 records the
+size each thumbnail was written at, so a size change redoes exactly the stale
+ones and nothing else.
 
 Colour extraction runs k-means in **CIE L\*a\*b\*** so clusters are perceptually
 grouped rather than grouped by raw RGB distance, and each cluster is represented
@@ -138,6 +147,7 @@ to disk.
 | 02 image URLs | 2,856 resolved · 6 without an image · 0 failed |
 | 03 palettes | **2,555 usable** · 243 dropped as greyscale · 14 with no stable palette |
 | 04 build | 2,555 paintings · 11,728 colour cells · 40 columns · 1311–1910 · 420 KB |
+| 05 thumbs | 2,555 rendered · 0 failed · 596–625 px long edge · 111 MB committed |
 
 Stage 02 lost 80 works to rate-limit failures on its first pass; re-running the
 script recovered all 80 at the same 4.2 req/s. That is what the append-and-skip
@@ -148,27 +158,54 @@ loss: they are black-and-white archive photographs of paintings, and their
 "palette" would have been a run of neutrals invented by the reproduction rather
 than by the painter.
 
-At the default fit the grid is 160 × 86 cells and a cell measures 8.8 px, so the
-whole 1311–1910 span reads as one continuous field without the cells falling
-below the size at which they stay individually distinguishable when zoomed.
-
 ## App
 
 `app/` is plain static files — no bundler, no build step, no dependencies. The
 GitHub Actions workflow uploads the directory as-is.
 
+The 11,728 cells are not laid out as a flat field. They are wound onto a tape
+19 rows tall and 638 columns long, and the tape is drawn on a drum: only about a
+fifth of it is on screen at once, the rest curving away into black at both sides.
+You wind it by dragging or scrolling, and the strip along the bottom is both the
+only view of the whole span and the scrubber for it.
+
+- **The drum's axis is vertical.** That is the decision the rest of the renderer
+  rests on: the perspective factor then depends only on the column, so every cell
+  stays an axis-aligned rectangle drawn with one `fillRect`, and both of its
+  boundaries can be rounded in projected space — which is what keeps the curving
+  surface borderless and edge-to-edge, with no stroke and no gutter anywhere.
+- **The arc is 46°, chosen by measurement.** A cell runs 14 px at the crown and
+  compresses to 6.3 px at the rim, so nothing on the visible surface falls under
+  the 6 px floor the panel look depends on. Past ~52° the edge turns to smear;
+  past ~66° the projection folds back on itself.
+- **Columns outside the arc must be culled before drawing.** `sin()` is periodic,
+  so their projected x re-enters the viewport with a plausible-looking but wrong
+  value. This is enforced in one place, `visibleCols()`.
+- **Columns per bin vary.** Bins carry 169–342 cells, so sizing every bin to the
+  widest would punch black holes through roughly a fifth of the tape. Each bin
+  gets `ceil(cells / rows)` columns instead, and the surface stays solid.
+- Cells are stored **column-major within a bin**, which makes one painting's cells
+  a single contiguous run. Both the hover lift and the selection outline are
+  therefore O(k) in the palette, with no search.
+- Hit testing inverts the projection in closed form (bisection on a monotonic
+  term), so it is exact rather than a scan over cells.
 - **Canvas 2D**, not DOM and not WebGL: ~12,000 cells is far too many for
   elements and comfortable for `fillRect`.
-- The world is measured in **cell units**, and zoom is simply pixels-per-cell, so
-  panning and zooming behave like a map and the layout is rebuilt on resize only.
-- Cell edges are produced by rounding *both* boundaries in world space, so
-  neighbours always share an exact pixel edge — that is what makes the surface
-  borderless and edge-to-edge.
-- Hit testing is **O(1) inverse arithmetic**. The grid is regular by
-  construction, so there is no quadtree and no per-cell object.
 - Transitions between discrete states are a **CRT-style scan-line refresh**: the
   new frame is composed offscreen and swept in over the standing one band by
-  band.
+  band. Scrolling, zooming and hovering redraw immediately instead — a wipe there
+  would read as lag.
+- Highlighting **never tints a measured colour.** A hovered or selected work is
+  lifted off the drum — its own cells, redrawn larger about their centre — and
+  framed in the single UI accent. The accent never fills a cell.
+
+Selecting a work opens it at 300 CSS px beside a technical sheet: date, school,
+the column's real span and work count, object id, how many of the five requested
+clusters survived the 4% floor, and the extracted colours with their hex values.
+Thumbnails are committed to the repo (stage 05) and land at 596–625 px on the long
+edge, median 624 — the target is set above the Met's web-size ceiling on purpose,
+so nothing is upscaled and nothing is discarded. The browser never requests an
+image from the Met.
 
 ## Attribution
 

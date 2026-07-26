@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <title>CHROMATICA — colour extracted from six centuries of painting</title>
-<meta name="description" content="Every cell is a real colour extracted from a real painting in the Metropolitan Museum of Art, arranged chronologically from 1300 to 1910.">
+<meta name="description" content="Every cell is a real colour extracted from a real painting in the Metropolitan Museum of Art, wound onto a scrollable tape running from 1300 to 1910.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
@@ -19,7 +19,7 @@
 <header class="hud hud--top">
   <div class="hud__brand">
     <span class="hud__title">CHROMATICA</span>
-    <span class="hud__sub">COLOUR FIELD / MET OPEN ACCESS</span>
+    <span class="hud__sub">COLOUR TAPE / MET OPEN ACCESS</span>
   </div>
   <dl class="readout" id="readout">
     <div><dt>WORKS</dt><dd id="statWorks">····</dd></div>
@@ -33,16 +33,18 @@
   <canvas id="grid"></canvas>
   <div class="crosshair" id="crosshair" hidden></div>
   <div class="hoverchip" id="hoverchip" hidden></div>
+  <p class="stage__hint">DRAG OR SCROLL TO WIND THE TAPE · CLICK A CELL</p>
 </main>
 
 <footer class="hud hud--bottom">
-  <div class="scale" id="scale" aria-hidden="true"></div>
   <div class="controls">
     <div class="cursor">
-      <span class="cursor__label">RANGE</span>
-      <span class="cursor__year" id="cursorFrom">····</span>
-      <span class="cursor__dash">→</span>
-      <span class="cursor__year" id="cursorTo">····</span>
+      <span class="cursor__label">AT</span>
+      <span class="cursor__year" id="crownYear">····</span>
+      <span class="cursor__range">
+        <span class="cursor__label">IN VIEW</span>
+        <b id="cursorFrom">····</b><span class="cursor__dash">→</span><b id="cursorTo">····</b>
+      </span>
     </div>
     <label class="filter">
       <span class="filter__label">SCHOOL</span>
@@ -55,25 +57,31 @@
       <button id="btnInfo" title="About">?</button>
     </div>
   </div>
-  <div class="density" id="density">
-    <span class="density__label">DATA DENSITY / WORKS PER YEAR / LOG</span>
-    <canvas id="densityCanvas"></canvas>
+  <div class="timeline">
+    <span class="timeline__label">WHOLE TAPE / WORKS PER YEAR / LOG</span>
+    <canvas id="timelineCanvas"></canvas>
   </div>
 </footer>
 
-<div class="panel" id="detail" hidden>
+<div class="panel panel--detail" id="detail" hidden>
   <button class="panel__close" id="detailClose" aria-label="Close">×</button>
   <div class="panel__body">
-    <img id="detailImg" alt="" width="200" height="200">
+    <figure class="panel__figure">
+      <img id="detailImg" alt="" decoding="async">
+    </figure>
     <div class="panel__meta">
-      <div class="panel__swatches" id="detailSwatches"></div>
+      <span class="panel__eyebrow">TECHNICAL SHEET</span>
       <h2 id="detailTitle"></h2>
       <p class="panel__artist" id="detailArtist"></p>
       <dl class="panel__rows">
         <div><dt>DATED</dt><dd id="detailYear"></dd></div>
         <div><dt>SCHOOL</dt><dd id="detailNat"></dd></div>
+        <div><dt>COLUMN</dt><dd id="detailColumn"></dd></div>
         <div><dt>OBJECT</dt><dd id="detailId"></dd></div>
+        <div><dt>PALETTE</dt><dd id="detailPalette"></dd></div>
       </dl>
+      <span class="panel__eyebrow">EXTRACTED COLOURS / ORDERED BY PIXEL SHARE</span>
+      <ul class="swatches" id="detailSwatches"></ul>
       <a id="detailLink" href="#" target="_blank" rel="noopener noreferrer">VIEW AT THE MET ↗</a>
     </div>
   </div>
@@ -83,21 +91,30 @@
   <button class="panel__close" id="aboutClose" aria-label="Close">×</button>
   <div class="about__body">
     <h2>CHROMATICA</h2>
-    <p>Every cell in this field is a real colour, extracted by k-means clustering
+    <p>Every cell on this tape is a real colour, extracted by k-means clustering
        from the photograph of a real painting. Nothing here is decorative: no
        colour has been chosen, corrected, or invented. Click any cell to see the
        work it came from.</p>
+    <h3>HOW TO READ IT</h3>
+    <p>The tape is wound on a drum, so only about a fifth of it is on screen at
+       once — drag or scroll to wind it, and the strip at the very bottom shows
+       where you are on the whole span. Cells run 14 pixels at the crown and
+       compress to 6 at the rim; the curvature is what hides the ends, and no
+       colour is altered by it.</p>
     <h3>METHOD</h3>
     <ul id="aboutMethod"></ul>
-    <h3>WHAT THE GAPS MEAN</h3>
-    <p>The horizontal axis is ordinal, not linear. Each column holds roughly the
-       same number of paintings, so a column may span a century where the
-       collection is thin and two years where it is dense. The strip at the
-       bottom reports the real span and count of every column. This is a survey
-       of one museum's public-domain holdings, not of art history.</p>
-    <p>The field stops around 1910. That is a copyright boundary, not an
-       aesthetic one: paintings after it are almost never in the public domain,
-       so the twentieth century cannot be shown honestly here.</p>
+    <h3>WHAT THE AXIS MEANS</h3>
+    <p>Horizontal position is time and nothing else. The axis is ordinal rather
+       than linear: each column of the tape holds roughly the same number of
+       paintings, so one column may span a century where the collection is thin
+       and two years where it is dense. The ticks under the tape carry the real
+       year, and the strip at the bottom reports works per year — so the
+       unevenness stays visible instead of being flattened by the layout. This is
+       a survey of one museum's public-domain holdings, not of art history.</p>
+    <p>The tape stops around 1910, and it stops rather than looping. That is a
+       copyright boundary, not an aesthetic one: paintings after it are almost
+       never in the public domain, so the twentieth century cannot be shown
+       honestly here.</p>
     <h3>SOURCE</h3>
     <p id="aboutSource"></p>
     <p>Images and metadata: The Metropolitan Museum of Art Open Access

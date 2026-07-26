@@ -13,7 +13,7 @@
   --mono: "JetBrains Mono", "IBM Plex Mono", ui-monospace, SFMono-Regular,
           Menlo, Consolas, monospace;
   --hud-h: 46px;
-  --foot-h: 108px;
+  --foot-h: 96px;
 }
 
 * { box-sizing: border-box; }
@@ -86,6 +86,15 @@ body { display: flex; flex-direction: column; }
     0deg, #ffffff04 0 1px, transparent 1px 3px);
 }
 #grid { display: block; width: 100%; height: 100%; }
+.stage.is-grabbing { cursor: grabbing; }
+
+/* Says how the surface works, then gets out of the way. */
+.stage__hint {
+  position: absolute; left: 0; right: 0; bottom: 10px; margin: 0;
+  text-align: center; font-size: 8px; letter-spacing: .22em; color: #343a36;
+  pointer-events: none; transition: opacity .4s linear;
+}
+.stage.is-grabbing .stage__hint { opacity: 0; }
 
 .crosshair {
   position: absolute; top: 0; bottom: 0; width: 1px;
@@ -104,20 +113,11 @@ body { display: flex; flex-direction: column; }
 .hoverchip i { color: #6f7671; font-style: normal; }
 
 /* ---------- bottom controls ---------- */
-.scale { height: 13px; position: relative; overflow: hidden; }
-.scale span {
-  position: absolute; top: 0; font-size: 9px; color: #4a504c;
-  letter-spacing: .08em; transform: translateX(-50%); white-space: nowrap;
-}
-.scale span::before {
-  content: ""; position: absolute; left: 50%; top: -8px;
-  width: 1px; height: 5px; background: var(--line);
-}
-.scale span.is-major { color: var(--text); }
-
 .controls { display: flex; align-items: center; gap: 18px; flex-wrap: wrap; }
 
 .cursor { display: flex; align-items: baseline; gap: 8px; }
+.cursor__range { display: flex; align-items: baseline; gap: 6px; margin-left: 6px; }
+.cursor__range b { color: var(--text-bright); font-size: 11px; font-weight: 500; }
 .cursor__label { font-size: 8px; letter-spacing: .16em; color: #4a504c; }
 .cursor__year {
   font-size: 21px; font-weight: 500; color: var(--accent);
@@ -151,13 +151,18 @@ button {
 }
 button:hover { color: var(--accent); border-color: var(--accent); }
 
-/* ---------- density strip ---------- */
-.density { display: flex; align-items: center; gap: 9px; }
-.density__label {
+/* ---------- tape overview ----------
+   The drum shows about a fifth of the tape, so this strip is the only view of the
+   whole span — and it is also the scrubber. */
+.timeline { display: flex; align-items: center; gap: 9px; }
+.timeline__label {
   font-size: 8px; letter-spacing: .14em; color: #3c423e;
   white-space: nowrap; flex: 0 0 auto;
 }
-#densityCanvas { flex: 1 1 auto; height: 15px; display: block; }
+#timelineCanvas {
+  flex: 1 1 auto; height: 22px; display: block;
+  cursor: ew-resize; touch-action: none;
+}
 
 /* ---------- panels ---------- */
 .panel {
@@ -180,20 +185,40 @@ button:hover { color: var(--accent); border-color: var(--accent); }
 }
 .panel__close:hover { color: var(--accent); border: none; }
 
-.panel__body { display: flex; gap: 12px; padding: 12px; }
-#detailImg {
-  width: 96px; height: auto; flex: 0 0 96px; align-self: flex-start;
+/* The work is the largest thing on screen once chosen; the sheet sits beside it
+   in the same cold register as the rest of the interface. */
+.panel--detail { width: 620px; }
+.panel__body { display: flex; gap: 16px; padding: 14px; }
+.panel__figure {
+  margin: 0; flex: 0 0 300px; width: 300px; align-self: flex-start;
   background: #141414; border: 1px solid #232323;
+  display: flex; align-items: center; justify-content: center;
+  min-height: 120px;
 }
+#detailImg { display: block; width: 100%; height: auto; }
+
 .panel__meta { min-width: 0; flex: 1 1 auto; }
-.panel__swatches { display: flex; height: 5px; margin-bottom: 8px; }
-.panel__swatches i { flex: 1 1 auto; }
+.panel__eyebrow {
+  display: block; font-size: 8px; letter-spacing: .18em; color: var(--accent);
+  margin-bottom: 7px;
+}
 .panel h2 {
-  margin: 0 0 3px; font-size: 12px; font-weight: 500; line-height: 1.35;
+  margin: 0 0 3px; font-size: 13px; font-weight: 500; line-height: 1.35;
   color: var(--text-bright); letter-spacing: .01em;
 }
-.panel__artist { margin: 0 0 9px; font-size: 10px; color: var(--accent); }
-.panel__rows { margin: 0 0 10px; display: grid; gap: 3px; }
+.panel__artist { margin: 0 0 11px; font-size: 10px; color: var(--accent); }
+
+/* Hex values are the measurement, so they are set as text next to the colour
+   rather than being left implicit in the swatch. */
+.swatches { list-style: none; margin: 0 0 12px; padding: 0; display: grid; gap: 2px; }
+.swatches li { display: flex; align-items: center; gap: 8px; }
+.swatches i { width: 26px; height: 13px; flex: 0 0 26px; }
+.swatches code {
+  font-family: var(--mono); font-size: 10px; color: var(--text);
+  letter-spacing: .06em;
+}
+
+.panel__rows { margin: 0 0 13px; display: grid; gap: 3px; }
 .panel__rows > div { display: flex; gap: 8px; }
 .panel__rows dt { font-size: 8px; letter-spacing: .14em; color: #4a504c; width: 52px; flex: 0 0 52px; padding-top: 1px; }
 .panel__rows dd { margin: 0; font-size: 10px; color: var(--text); }
@@ -215,11 +240,15 @@ button:hover { color: var(--accent); border-color: var(--accent); }
 .about__body li::marker { color: #3c423e; }
 
 @media (max-width: 720px) {
-  :root { --foot-h: 128px; }
+  :root { --foot-h: 116px; }
   .readout > div:nth-child(n+3) { display: none; }
-  .hud__sub { display: none; }
+  .hud__sub, .stage__hint, .cursor__range { display: none; }
+  .timeline__label { display: none; }
   .filter { margin-left: 0; }
-  .panel { right: 7px; left: 7px; width: auto; }
+  .panel, .panel--detail { right: 7px; left: 7px; width: auto; }
+  .panel--detail { max-height: 70vh; overflow-y: auto; }
+  .panel__body { flex-direction: column; }
+  .panel__figure { flex: 0 0 auto; width: 100%; }
 }
 
 @media (prefers-reduced-motion: reduce) {

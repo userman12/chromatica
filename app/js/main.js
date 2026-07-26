@@ -1,11 +1,22 @@
-/* CHROMATICA — application shell: data load, view state, input, HUD. */
-import { buildLayout, fitScale, hitTest, visibleBins } from "./layout.js";
+/* CHROMATICA — application shell: data load, tape state, input, HUD.
+ *
+ * The view is two numbers: which column of the tape sits at the crown of the
+ * drum, and how many pixels a cell measures there. There is no vertical pan — the
+ * ribbon always fits the stage vertically, so scrolling is one axis and one axis
+ * only, and that axis is time.
+ */
+import {
+  buildLayout, projection, hitTest, visibleBins, visibleCols,
+  worldAtScreenX, scaleBounds,
+} from "./layout.js";
 import { Renderer } from "./renderer.js";
 
 const MET_URL = "https://www.metmuseum.org/art/collection/search/";
-const MAX_SCALE = 44;                 // px per cell at full magnification
-const ZOOM_STEP = 1.45;
-const LABEL_MIN_PX = 46;              // horizontal room a year label needs
+const ZOOM_STEP = 1.35;
+const WHEEL_GAIN = 1.5;        // cells travelled per cell-width of wheel delta
+const FRICTION = 0.92;         // tape coasts to a stop after the hand lets go
+const VEL_MIN = 0.015;
+const CLICK_SLOP = 4;          // px of movement still counted as a click
 
 const $ = (id) => document.getElementById(id);
 const el = {
@@ -14,22 +25,23 @@ const el = {
   crosshair: $("crosshair"), hoverchip: $("hoverchip"),
   statWorks: $("statWorks"), statCells: $("statCells"),
   statSpan: $("statSpan"), statZoom: $("statZoom"),
-  scale: $("scale"), cursorFrom: $("cursorFrom"), cursorTo: $("cursorTo"),
-  filterNat: $("filterNat"), density: $("densityCanvas"),
+  crownYear: $("crownYear"), cursorFrom: $("cursorFrom"), cursorTo: $("cursorTo"),
+  filterNat: $("filterNat"), timeline: $("timelineCanvas"),
   btnOut: $("btnOut"), btnIn: $("btnIn"), btnReset: $("btnReset"), btnInfo: $("btnInfo"),
   detail: $("detail"), detailClose: $("detailClose"), detailImg: $("detailImg"),
-  detailSwatches: $("detailSwatches"), detailTitle: $("detailTitle"),
-  detailArtist: $("detailArtist"), detailYear: $("detailYear"),
-  detailNat: $("detailNat"), detailId: $("detailId"), detailLink: $("detailLink"),
+  detailTitle: $("detailTitle"), detailArtist: $("detailArtist"),
+  detailYear: $("detailYear"), detailNat: $("detailNat"), detailId: $("detailId"),
+  detailColumn: $("detailColumn"), detailPalette: $("detailPalette"),
+  detailSwatches: $("detailSwatches"), detailLink: $("detailLink"),
   about: $("about"), aboutClose: $("aboutClose"),
   aboutMethod: $("aboutMethod"), aboutSource: $("aboutSource"),
 };
 
 const state = {
   data: null, layout: null,
-  view: { scale: 1, panX: 0, panY: 0 },
+  view: { center: 0, scale: 14 },
   cssW: 0, cssH: 0,
-  minScale: 1,
+  bounds: { min: 8, max: 30 },
   selected: -1,
   matches: null,          // Uint8Array over paintings, or null when unfiltered
   hovered: -1,
@@ -46,9 +58,11 @@ function boot(line) {
 /* ---------- helpers ---------- */
 const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
 const num = (n) => n.toLocaleString("en-US");
+const span = (s, e) => (s === e ? String(s) : `${s}–${e}`);
 
-function metaSpan(bin) {
-  return bin.s === bin.e ? String(bin.s) : `${bin.s}–${bin.e}`;
+/** The projection in CSS pixels — what pointer coordinates live in. */
+function proj() {
+  return projection(state.layout, state.view, state.cssW, state.cssH);
 }
 
 /* ---------- view maintenance ---------- */
@@ -60,30 +74,30 @@ function measure() {
 }
 
 function relayout() {
-  const previous = state.layout ? state.view.scale / state.minScale : 1;
+  const before = state.layout ? state.view.center / state.layout.worldW : 0.5;
   state.layout = buildLayout(state.data, state.cssW, state.cssH);
-  state.minScale = fitScale(state.layout, state.cssW, state.cssH);
-  state.view.scale = state.minScale * previous;
+  state.bounds = scaleBounds(state.layout, state.cssH);
+  state.view.scale = clamp(state.layout.cellCenter, state.bounds.min, state.bounds.max);
+  state.view.center = before * state.layout.worldW;
   clampView();
 }
 
 function clampView() {
   const v = state.view;
-  const L = state.layout;
-  v.scale = clamp(v.scale, state.minScale, MAX_SCALE);
-  const visW = state.cssW / v.scale;
-  const visH = state.cssH / v.scale;
-  v.panX = visW >= L.worldW ? (L.worldW - visW) / 2 : clamp(v.panX, 0, L.worldW - visW);
-  v.panY = visH >= L.worldH ? (L.worldH - visH) / 2 : clamp(v.panY, 0, L.worldH - visH);
+  v.scale = clamp(v.scale, state.bounds.min, state.bounds.max);
+  // Both ends may be brought to the crown, so every work is reachable; past them
+  // the tape simply is not there any more, and the axis says so.
+  v.center = clamp(v.center, 0, state.layout.worldW - 1);
 }
 
-function zoomAt(factor, anchorX, anchorY) {
+function zoomAt(factor, anchorX) {
   const v = state.view;
-  const worldX = anchorX / v.scale + v.panX;
-  const worldY = anchorY / v.scale + v.panY;
-  v.scale = clamp(v.scale * factor, state.minScale, MAX_SCALE);
-  v.panX = worldX - anchorX / v.scale;
-  v.panY = worldY - anchorY / v.scale;
+  const anchor = worldAtScreenX(proj(), anchorX);
+  const before = v.scale;
+  v.scale = clamp(v.scale * factor, state.bounds.min, state.bounds.max);
+  // Keep the column under the cursor where it is: the arc scales with 1/scale, so
+  // the offset from the crown scales with it too.
+  v.center = anchor - (anchor - v.center) * (before / v.scale);
   clampView();
   render();
 }
@@ -96,7 +110,8 @@ function render(withScan) {
 
 function updateHud() {
   const L = state.layout;
-  const [b0, b1] = visibleBins(L, state.view, state.cssW);
+  const p = proj();
+  const [b0, b1] = visibleBins(L, p);
   const bins = state.data.bins;
 
   let works = 0, cells = 0;
@@ -115,38 +130,27 @@ function updateHud() {
     }
   }
 
+  const crown = bins[L.colBin[clamp(Math.round(p.center), 0, L.worldW - 1)]];
   const from = bins[b0].s;
   const to = bins[b1].e;
   el.statWorks.textContent = num(works);
   el.statCells.textContent = num(cells);
   el.statSpan.textContent = `${to - from + 1}y`;
-  el.statZoom.textContent = (state.view.scale / state.minScale).toFixed(2) + "×";
+  el.statZoom.textContent = (state.view.scale / state.layout.cellCenter).toFixed(2) + "×";
+  el.crownYear.textContent = crown.s;
   el.cursorFrom.textContent = from;
   el.cursorTo.textContent = to;
 
-  drawScaleLabels(b0, b1);
-  drawDensity(b0, b1);
+  drawTimeline(b0, b1);
 }
 
-function drawScaleLabels(b0, b1) {
-  const L = state.layout;
-  const colPx = L.cellsPerRow * state.view.scale;
-  const every = Math.max(1, Math.ceil(LABEL_MIN_PX / colPx));
-  const parts = [];
-  for (let b = b0; b <= b1; b++) {
-    if (b % every !== 0) continue;
-    const bin = state.data.bins[b];
-    const centre = ((b + 0.5) * L.cellsPerRow - state.view.panX) * state.view.scale;
-    if (centre < 12 || centre > state.cssW - 12) continue;
-    const major = colPx > 90;
-    parts.push(`<span class="${major ? "is-major" : ""}" style="left:${centre.toFixed(1)}px">`
-      + (major ? metaSpan(bin) : bin.s) + "</span>");
-  }
-  el.scale.innerHTML = parts.join("");
-}
-
-function drawDensity(b0, b1) {
-  const canvas = el.density;
+/**
+ * The tape overview. Because the drum only ever shows about a fifth of the tape,
+ * this strip is the only place the whole span is visible at once — so it carries
+ * both the density of the collection and a window showing where you are.
+ */
+function drawTimeline(b0, b1) {
+  const canvas = el.timeline;
   const dpr = Math.min(window.devicePixelRatio || 1, 2);
   const w = Math.max(1, Math.round(canvas.clientWidth * dpr));
   const h = Math.max(1, Math.round(canvas.clientHeight * dpr));
@@ -155,39 +159,60 @@ function drawDensity(b0, b1) {
   ctx.clearRect(0, 0, w, h);
 
   const bins = state.data.bins;
-  // Works per YEAR, not per column: columns hold ~equal counts by construction,
-  // so only the rate exposes how uneven the collection actually is over time.
+  // Works per YEAR, not per bin: bins hold ~equal counts by construction, so only
+  // the rate exposes how uneven the collection actually is over time.
   let peak = 0;
   const rate = bins.map((bin) => {
     const r = bin.n / (bin.e - bin.s + 1);
     if (r > peak) peak = r;
     return r;
   });
-  const colW = w / bins.length;
+
+  const L = state.layout;
+  const xOf = (col) => (col / L.worldW) * w;
+
   for (let b = 0; b < bins.length; b++) {
-    // log scale: real density spans about two orders of magnitude
-    const norm = Math.log1p(rate[b]) / Math.log1p(peak);
-    const barH = Math.max(1, Math.round(norm * h));
-    const inView = b >= b0 && b <= b1;
-    ctx.fillStyle = inView ? "#00ff9d" : "#2a2f2c";
-    ctx.fillRect(Math.round(b * colW), h - barH,
-                 Math.max(1, Math.round(colW) - (colW > 3 ? 1 : 0)), barH);
+    const norm = Math.log1p(rate[b]) / Math.log1p(peak);   // spans ~2 orders of magnitude
+    const barH = Math.max(1, Math.round(norm * (h - 1)));
+    const x0 = Math.round(xOf(L.binCol0[b]));
+    const x1 = Math.round(xOf(L.binCol0[b + 1]));
+    ctx.fillStyle = b >= b0 && b <= b1 ? "#00ff9d" : "#2a2f2c";
+    ctx.fillRect(x0, h - barH, Math.max(1, x1 - x0 - (x1 - x0 > 3 ? 1 : 0)), barH);
   }
+
+  // The slice of tape currently on the drum, plus the crown itself.
+  const [c0, c1] = visibleCols(L, proj());
+  ctx.strokeStyle = "#00ff9d";
+  ctx.globalAlpha = 0.55;
+  ctx.lineWidth = Math.max(1, dpr);
+  ctx.strokeRect(Math.round(xOf(c0)) + 0.5, 0.5,
+                 Math.max(2, Math.round(xOf(c1) - xOf(c0))), h - 1);
+  ctx.globalAlpha = 1;
+  ctx.fillStyle = "#00ff9d";
+  ctx.fillRect(Math.round(xOf(state.view.center)), 0, Math.max(1, dpr), h);
 }
 
 /* ---------- panels ---------- */
 function showDetail(index) {
   const p = state.data.paintings[index];
+  const bin = state.data.bins[p.b];
   state.selected = index;
   el.detailImg.src = `thumbs/${p.i}.jpg`;
   el.detailImg.alt = p.t || "Untitled";
-  el.detailSwatches.innerHTML = p.k
-    .map((hex) => `<i style="background:${hex}" title="${hex}"></i>`).join("");
   el.detailTitle.textContent = p.t || "Untitled";
   el.detailArtist.textContent = p.a || "Unattributed";
-  el.detailYear.textContent = p.s === p.e ? String(p.s) : `${p.s}–${p.e}`;
+  el.detailYear.textContent = span(p.s, p.e);
   el.detailNat.textContent = state.data.meta.nationalities[p.n] || "—";
   el.detailId.textContent = p.i;
+  el.detailColumn.textContent = `${span(bin.s, bin.e)} · ${bin.n} works`;
+  // k-means runs with k=5; clusters under 4% of pixels are dropped, so a shorter
+  // palette is a real statement about the painting, not a failure.
+  el.detailPalette.textContent = p.k.length === 5
+    ? "5 of 5 clusters retained"
+    : `${p.k.length} of 5 retained · ${5 - p.k.length} below the 4% floor`;
+  // Hex values are the measurement. They are shown as text, not just as colour.
+  el.detailSwatches.innerHTML = p.k.map((hex) =>
+    `<li><i style="background:${hex}"></i><code>${hex.toUpperCase()}</code></li>`).join("");
   el.detailLink.href = MET_URL + p.i;
   el.detail.hidden = false;
   render();
@@ -219,38 +244,76 @@ function stagePoint(event) {
   return [event.clientX - rect.left, event.clientY - rect.top];
 }
 
+let velocity = 0;
+let coasting = null;
+
+function coast() {
+  if (Math.abs(velocity) < VEL_MIN) { coasting = null; velocity = 0; render(); return; }
+  state.view.center += velocity;
+  const before = state.view.center;
+  clampView();
+  if (state.view.center !== before) velocity = 0;      // hit an end: stop dead
+  velocity *= FRICTION;
+  render();
+  coasting = requestAnimationFrame(coast);
+}
+
+function stopCoast() {
+  if (coasting) cancelAnimationFrame(coasting);
+  coasting = null;
+  velocity = 0;
+}
+
 function bindInput() {
   el.stage.addEventListener("wheel", (event) => {
     event.preventDefault();
-    const [x, y] = stagePoint(event);
-    zoomAt(Math.pow(0.9985, event.deltaY), x, y);
+    stopCoast();
+    if (event.ctrlKey || event.metaKey) {          // pinch, or ctrl+wheel
+      // The whole zoom range is only about 2.1x, and one mouse notch reports a
+      // delta of 100 — uncapped that is the entire range in a single click. A
+      // trackpad pinch reports single digits, so this cap only bites on wheels.
+      const [x] = stagePoint(event);
+      const d = Math.max(-30, Math.min(30, event.deltaY));
+      zoomAt(Math.pow(0.99, d), x);
+      return;
+    }
+    // Either wheel axis drives the tape. Vertical wheels are what most people
+    // have, and there is only one axis to move.
+    const delta = Math.abs(event.deltaX) > Math.abs(event.deltaY)
+      ? event.deltaX : event.deltaY;
+    state.view.center += (delta / state.view.scale) * WHEEL_GAIN;
+    clampView();
+    render();
   }, { passive: false });
 
   let dragging = null;
   el.stage.addEventListener("pointerdown", (event) => {
     el.stage.setPointerCapture(event.pointerId);
-    dragging = { x: event.clientX, y: event.clientY, moved: 0,
-                 panX: state.view.panX, panY: state.view.panY };
+    stopCoast();
+    dragging = { x: event.clientX, moved: 0, center: state.view.center, last: state.view.center };
+    el.stage.classList.add("is-grabbing");
   });
 
   el.stage.addEventListener("pointermove", (event) => {
     const [x, y] = stagePoint(event);
     if (dragging) {
       const dx = event.clientX - dragging.x;
-      const dy = event.clientY - dragging.y;
-      dragging.moved = Math.max(dragging.moved, Math.abs(dx) + Math.abs(dy));
-      state.view.panX = dragging.panX - dx / state.view.scale;
-      state.view.panY = dragging.panY - dy / state.view.scale;
+      dragging.moved = Math.max(dragging.moved, Math.abs(dx));
+      // Drag left, tape travels forward in time — the surface follows the hand.
+      state.view.center = dragging.center - dx / state.view.scale;
       clampView();
+      velocity = state.view.center - dragging.last;
+      dragging.last = state.view.center;
       render();
       return;
     }
     el.crosshair.hidden = false;
     el.crosshair.style.left = Math.round(x) + "px";
-    const hit = hitTest(state.layout, state.view, x, y);
+    const hit = hitTest(state.layout, proj(), x, y);
     if (hit !== state.hovered) {
       state.hovered = hit;
       updateHoverChip(hit, x, y);
+      renderer.draw(state);            // the lift is part of the frame
     } else if (hit >= 0) {
       placeHoverChip(x, y);
     }
@@ -258,34 +321,47 @@ function bindInput() {
 
   const endDrag = (event) => {
     if (!dragging) return;
-    const wasClick = dragging.moved < 4;
+    const wasClick = dragging.moved < CLICK_SLOP;
     dragging = null;
-    if (!wasClick) return;
-    const [x, y] = stagePoint(event);
-    const hit = hitTest(state.layout, state.view, x, y);
-    if (hit >= 0) showDetail(hit); else hideDetail();
+    el.stage.classList.remove("is-grabbing");
+    if (wasClick) {
+      const [x, y] = stagePoint(event);
+      const hit = hitTest(state.layout, proj(), x, y);
+      if (hit >= 0) showDetail(hit); else hideDetail();
+      return;
+    }
+    if (Math.abs(velocity) >= VEL_MIN) coasting = requestAnimationFrame(coast);
   };
   el.stage.addEventListener("pointerup", endDrag);
-  el.stage.addEventListener("pointercancel", () => { dragging = null; });
+  el.stage.addEventListener("pointercancel", () => {
+    dragging = null;
+    el.stage.classList.remove("is-grabbing");
+  });
 
   el.stage.addEventListener("pointerleave", () => {
     el.crosshair.hidden = true;
     el.hoverchip.hidden = true;
-    state.hovered = -1;
+    if (state.hovered >= 0) { state.hovered = -1; renderer.draw(state); }
   });
 
-  el.density.addEventListener("pointerdown", (event) => {
-    const rect = el.density.getBoundingClientRect();
+  const scrub = (event) => {
+    const rect = el.timeline.getBoundingClientRect();
     const fraction = clamp((event.clientX - rect.left) / rect.width, 0, 1);
-    const targetBin = Math.floor(fraction * state.data.bins.length);
-    const visW = state.cssW / state.view.scale;
-    state.view.panX = (targetBin + 0.5) * state.layout.cellsPerRow - visW / 2;
+    stopCoast();
+    state.view.center = fraction * state.layout.worldW;
     clampView();
-    render(true);
+    render();
+  };
+  el.timeline.addEventListener("pointerdown", (event) => {
+    el.timeline.setPointerCapture(event.pointerId);
+    scrub(event);
+  });
+  el.timeline.addEventListener("pointermove", (event) => {
+    if (event.buttons === 1) scrub(event);
   });
 
-  el.btnIn.addEventListener("click", () => zoomAt(ZOOM_STEP, state.cssW / 2, state.cssH / 2));
-  el.btnOut.addEventListener("click", () => zoomAt(1 / ZOOM_STEP, state.cssW / 2, state.cssH / 2));
+  el.btnIn.addEventListener("click", () => zoomAt(ZOOM_STEP, state.cssW / 2));
+  el.btnOut.addEventListener("click", () => zoomAt(1 / ZOOM_STEP, state.cssW / 2));
   el.btnReset.addEventListener("click", resetView);
   el.btnInfo.addEventListener("click", () => { el.about.hidden = false; });
   el.aboutClose.addEventListener("click", () => { el.about.hidden = true; });
@@ -293,15 +369,14 @@ function bindInput() {
   el.filterNat.addEventListener("change", (event) => applyFilter(Number(event.target.value)));
 
   window.addEventListener("keydown", (event) => {
-    if (event.key === "+" || event.key === "=") zoomAt(ZOOM_STEP, state.cssW / 2, state.cssH / 2);
-    else if (event.key === "-" || event.key === "_") zoomAt(1 / ZOOM_STEP, state.cssW / 2, state.cssH / 2);
+    if (event.key === "+" || event.key === "=") zoomAt(ZOOM_STEP, state.cssW / 2);
+    else if (event.key === "-" || event.key === "_") zoomAt(1 / ZOOM_STEP, state.cssW / 2);
     else if (event.key === "0") resetView();
     else if (event.key === "Escape") { hideDetail(); el.about.hidden = true; }
     else if (event.key === "ArrowRight" || event.key === "ArrowLeft") {
-      const dir = event.key === "ArrowRight" ? 1 : -1;
-      state.view.panX += dir * state.layout.cellsPerRow;
-      clampView();
-      render();
+      event.preventDefault();
+      stopCoast();
+      stepBin(event.key === "ArrowRight" ? 1 : -1);
     }
   });
 
@@ -312,9 +387,21 @@ function bindInput() {
   });
 }
 
+/** Arrow keys move a whole column of time, so the axis is walkable exactly. */
+function stepBin(dir) {
+  const L = state.layout;
+  const here = L.colBin[clamp(Math.round(state.view.center), 0, L.worldW - 1)];
+  const target = clamp(here + dir, 0, state.data.bins.length - 1);
+  state.view.center = (L.binCol0[target] + L.binCol0[target + 1]) / 2;
+  clampView();
+  render();
+}
+
 function resetView() {
   hideDetail();
-  state.view.scale = state.minScale;
+  stopCoast();
+  state.view.scale = state.layout.cellCenter;
+  state.view.center = state.layout.worldW / 2;
   clampView();
   render(true);
 }
@@ -322,9 +409,8 @@ function resetView() {
 function updateHoverChip(index, x, y) {
   if (index < 0) { el.hoverchip.hidden = true; return; }
   const p = state.data.paintings[index];
-  const year = p.s === p.e ? p.s : `${p.s}–${p.e}`;
   el.hoverchip.innerHTML = `<b>${escapeHtml(p.t || "Untitled")}</b>`
-    + `<i>${escapeHtml(p.a || "Unattributed")} · ${year}</i>`;
+    + `<i>${escapeHtml(p.a || "Unattributed")} · ${span(p.s, p.e)}</i>`;
   el.hoverchip.hidden = false;
   placeHoverChip(x, y);
 }
@@ -387,7 +473,8 @@ async function init() {
   fillAbout(data.meta);
   measure();
   relayout();
-  boot(`> grid ${state.layout.worldW}×${state.layout.worldH} cells`);
+  state.view.center = state.layout.worldW / 2;
+  boot(`> tape ${state.layout.worldW}×${state.layout.rows} cells / mounting drum`);
   boot("> scanning ...");
 
   bindInput();
