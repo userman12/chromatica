@@ -12,13 +12,14 @@
  * would put a made-up direction into a picture whose whole claim is that no
  * direction is made up. A dim cloud is a dark century.
  *
- * Time is a weight, not a position. The scrubber sets a year; each particle gets a
- * Gaussian weight on the distance from its painting's year to that year, and the
- * weight drives opacity, size and how far the particle is pushed out from its
- * exact colour coordinate. That last part is the density mechanism: when many
- * paintings of one period share a region of the plane, the particles there cannot
- * all occupy one point, so the region swells and thickens. Area and solidity are
- * the statistic. Nothing is normalised into a bar.
+ * Time is a weight, not a position. The default state weights every painting
+ * equally: the whole collection at once, six centuries in one field. Turning the
+ * timelapse on replaces that flat weight with a Gaussian on the distance from each
+ * painting's year to the cursor, and the weight drives opacity, size and how far
+ * the particle is pushed out from its exact colour coordinate. That last part is
+ * the density mechanism: when many paintings share a region of the plane, the
+ * particles there cannot all occupy one point, so the region swells and thickens.
+ * Area and solidity are the statistic. Nothing is normalised into a bar.
  */
 
 /* ---------- sRGB → CIE L*a*b* (D65) ---------- */
@@ -83,6 +84,7 @@ export class Field {
     this.lum = new Float32Array(n);     // L*, kept for the readout only
     this.year = new Int16Array(n);
     this.owner = new Int32Array(n);     // index into data.paintings
+    this.natOf = new Int16Array(n);     // school, copied down for the filter
     this.mass = new Float32Array(n);    // from the cluster's rank in the palette
     this.css = new Array(n);            // the measured colour, as given
     this.jx = new Float32Array(n);      // unit direction of this particle's offset
@@ -105,6 +107,7 @@ export class Field {
         this.lx[i] = A; this.ly[i] = B; this.lum[i] = L;
         this.year[i] = p.y;
         this.owner[i] = pi;
+        this.natOf[i] = p.n ?? -1;
         this.mass[i] = RANK_MASS[Math.min(k, RANK_MASS.length - 1)];
         this.css[i] = p.k[k];
         // A deterministic offset direction and radius. Deterministic matters: a
@@ -158,7 +161,11 @@ export class Field {
 
     this.view = { ox: 0, oy: 0, scale: 1, short: 1 };
     this.placed = false;
-    this.stats = { works: 0, colours: 0, from: y0, to: y0, sigma: SIGMA_MIN };
+    this.stats = { works: 0, colours: 0, from: y0, to: y1, sigma: 0 };
+    // Counting distinct works per frame without allocating a Set each frame:
+    // a stamp per painting, compared against the frame's own stamp.
+    this.seenStamp = 0;
+    this.seenAt = new Int32Array(paintings.length);
   }
 
   /**
@@ -213,26 +220,38 @@ export class Field {
   }
 
   /**
-   * Advance one frame. `year` is the scrubber position, `t` is seconds since start.
+   * Advance one frame.
+   *
+   * `year` is the timelapse cursor, or null for the default state: the whole
+   * collection at once, every painting weighted the same. `nat` is a school index
+   * or -1 for all schools — a filter, so a school shows its own colour tradition
+   * rather than being averaged into everyone else's.
+   *
    * Returns nothing; positions and weights are read straight off the arrays.
    */
-  step(year, t, reduceMotion) {
-    const sigma = this.sigmaAt(year);
-    const inv = 1 / (2 * sigma * sigma);
+  step({ year = null, t = 0, reduceMotion = false, nat = -1 }) {
+    const timed = year !== null;
+    const sigma = timed ? this.sigmaAt(year) : 0;
+    const inv = timed ? 1 / (2 * sigma * sigma) : 0;
     const { density, cell, n } = this;
     density.fill(0);
 
-    let total = 0;
-    const seen = new Set();
+    const stamp = ++this.seenStamp;
+    let total = 0, works = 0;
     for (let i = 0; i < n; i++) {
-      const d = this.year[i] - year;
-      const wt = Math.exp(-d * d * inv);
-      if (wt < MIN_WEIGHT) { this.w[i] = 0; continue; }
+      if (nat >= 0 && this.natOf[i] !== nat) { this.w[i] = 0; continue; }
+      let wt = 1;
+      if (timed) {
+        const d = this.year[i] - year;
+        wt = Math.exp(-d * d * inv);
+        if (wt < MIN_WEIGHT) { this.w[i] = 0; continue; }
+      }
       this.w[i] = wt;
       const m = wt * this.mass[i];
       density[cell[i]] += m;
       total += m;
-      seen.add(this.owner[i]);
+      const o = this.owner[i];
+      if (this.seenAt[o] !== stamp) { this.seenAt[o] = stamp; works++; }
     }
 
     let occupied = 0;
@@ -275,7 +294,7 @@ export class Field {
     }
 
     this.placed = true;
-    this.stats = { works: seen.size, colours, from, to, sigma };
+    this.stats = { works, colours, from, to, sigma };
   }
 
   /** Nearest drawn particle to a point, or -1. Called on click only. */

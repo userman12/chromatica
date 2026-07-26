@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>CHROMATICA — the colour of six centuries of painting</title>
-<meta name="description" content="Every colour of 2,555 public-domain paintings from The Metropolitan Museum of Art, 1311–1910, floating in the CIE L*a*b* chromatic plane. Drag the year and watch the field recompose.">
+<meta name="description" content="Every colour of 2,555 public-domain paintings from The Metropolitan Museum of Art, 1311–1910, floating in the CIE L*a*b* chromatic plane. The whole collection at once, or a timelapse through it.">
 <meta name="color-scheme" content="dark">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' fill='%230a0a0a'/%3E%3Ccircle cx='6.5' cy='6' r='3.2' fill='%23c8873c'/%3E%3Ccircle cx='10' cy='10' r='2.6' fill='%235d7f86'/%3E%3C/svg%3E">
 <link rel="stylesheet" href="css/style.css">
@@ -12,35 +12,68 @@
 <body>
 
 <!-- One deliberate beat of a technical readout before the field appears. -->
-<div class="boot" id="boot"><pre class="boot__log" id="bootLog">CHROMATICA v0.2</pre></div>
+<div class="boot" id="boot"><pre class="boot__log" id="bootLog">CHROMATICA v0.3</pre></div>
+
+<header class="hud hud--top">
+  <div class="hud__brand">
+    <span class="hud__title">CHROMATICA</span>
+    <span class="hud__sub" id="hudSub">CIE L*a*b* CHROMATIC PLANE · CLICK A PARTICLE FOR ITS PAINTING</span>
+  </div>
+  <dl class="readout">
+    <div><dt>WORKS</dt><dd id="statWorks">—</dd></div>
+    <div><dt>COLOURS</dt><dd id="statColours">—</dd></div>
+    <div><dt>SPAN</dt><dd id="statSpan">—</dd></div>
+    <div><dt>WINDOW</dt><dd id="statWindow">—</dd></div>
+  </dl>
+  <!-- Author and source, at the same weight as the readout beside them. -->
+  <nav class="credit" aria-label="Author and source">
+    <a class="credit__link" href="https://x.com/userluke_" target="_blank" rel="me noopener"
+       title="@userluke_ on X" aria-label="@userluke_ on X">
+      <svg viewBox="0 0 1200 1227" aria-hidden="true" focusable="false"><path fill="currentColor" d="M714.163 519.284 1160.89 0h-105.86L667.137 450.887 357.328 0H0l468.492 681.821L0 1227.01h105.866l409.625-476.792 327.181 476.792H1200L714.137 519.284h.026ZM569.165 687.828l-47.468-67.894L144.011 79.694h162.604l304.797 435.723 47.468 67.894 396.2 566.721H892.476L569.165 687.854v-.026Z"/></svg>
+    </a>
+    <a class="credit__link" href="https://github.com/userman12/chromatica" target="_blank" rel="noopener"
+       title="Source on GitHub" aria-label="Source on GitHub">
+      <svg viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path fill="currentColor" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82a5.9 5.9 0 0 1 2-.27c.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8Z"/></svg>
+    </a>
+  </nav>
+</header>
 
 <main class="stage" id="stage">
   <canvas id="field"></canvas>
+  <div class="hoverchip" id="hoverchip" hidden></div>
+  <p class="stage__hint" id="hint">EVERY PARTICLE IS ONE MEASURED COLOUR OF ONE PAINTING</p>
 </main>
 
-<!-- The whole interface: a year, and the track it slides on. -->
-<footer class="scrub" id="scrub">
-  <div class="scrub__year" id="year" aria-hidden="true">1311</div>
-  <canvas id="track" tabindex="0" role="slider"
-          aria-label="Year" aria-valuemin="1311" aria-valuemax="1910" aria-valuenow="1311"></canvas>
-  <p class="scrub__hint" id="hint">DRAG</p>
+<footer class="hud hud--bottom">
+  <div class="controls">
+    <div class="cursor">
+      <span class="cursor__label" id="cursorLabel">SHOWING</span>
+      <span class="cursor__year" id="cursorValue">ALL YEARS</span>
+      <span class="cursor__range" id="cursorRange" hidden>
+        <span class="cursor__label">WINDOW</span><b id="cursorSpan">—</b>
+      </span>
+    </div>
+
+    <div class="filter">
+      <label class="filter__label" for="natFilter">SCHOOL</label>
+      <select id="natFilter"><option value="-1">ALL</option></select>
+    </div>
+
+    <div class="btns">
+      <button id="btnTimelapse" aria-pressed="false" title="Move a window through time instead of showing the whole span">TIMELAPSE</button>
+      <button id="btnPlay" hidden title="Play or pause the timelapse">❚❚</button>
+      <button id="btnReset" title="Back to the whole collection">RESET</button>
+      <button id="btnInfo" title="About">?</button>
+    </div>
+  </div>
+
+  <div class="timeline">
+    <span class="timeline__label" id="timelineLabel">WORKS PER YEAR · CLICK TO START A TIMELAPSE</span>
+    <canvas id="timelineCanvas" tabindex="0" role="slider"
+            aria-label="Year" aria-valuemin="1311" aria-valuemax="1910" aria-valuenow="1311"></canvas>
+  </div>
 </footer>
 
-<!-- Author and source. Dim to the point of near-absence until pointed at: this
-     corner is the only place the interface is allowed to mention itself. -->
-<nav class="credit" aria-label="Author and source">
-  <a class="credit__link" href="https://x.com/userluke_" target="_blank" rel="me noopener"
-     title="@userluke_ on X" aria-label="@userluke_ on X">
-    <svg viewBox="0 0 1200 1227" aria-hidden="true" focusable="false"><path fill="currentColor" d="M714.163 519.284 1160.89 0h-105.86L667.137 450.887 357.328 0H0l468.492 681.821L0 1227.01h105.866l409.625-476.792 327.181 476.792H1200L714.137 519.284h.026ZM569.165 687.828l-47.468-67.894L144.011 79.694h162.604l304.797 435.723 47.468 67.894 396.2 566.721H892.476L569.165 687.854v-.026Z"/></svg>
-  </a>
-  <a class="credit__link" href="https://github.com/userman12/chromatica" target="_blank" rel="noopener"
-     title="Source on GitHub" aria-label="Source on GitHub">
-    <svg viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path fill="currentColor" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82a5.9 5.9 0 0 1 2-.27c.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8Z"/></svg>
-  </a>
-  <button class="info" id="btnInfo" title="About">?</button>
-</nav>
-
-<!-- Optional second layer. The field is complete without ever opening this. -->
 <aside class="panel panel--detail" id="detail" hidden>
   <button class="panel__close" id="detailClose" aria-label="Close">×</button>
   <div class="panel__body">
@@ -86,21 +119,24 @@
 
     <h3>DENSITY</h3>
     <p>A particle is pushed out from its exact colour coordinate in proportion to
-      how much of the period's measured colour falls in that part of the plane. So
-      a heavily used region swells and thickens, and a rare one stays a few sparks.
-      Area and solidity are the statistic; it is share within the period, not raw
-      count, so scrubbing changes the shape of the cloud instead of merely
-      inflating it wherever the museum owns more paintings. Particle size follows
-      the cluster's share of its own painting, largest first.</p>
+      how much of the shown collection's measured colour falls in that part of the
+      plane. So a heavily used region swells and thickens, and a rare one stays a
+      few sparks. Area and solidity are the statistic; it is share within what is
+      shown, not raw count, so changing what is shown changes the shape of the
+      cloud instead of merely inflating it wherever the museum owns more paintings.
+      Particle size follows the cluster's share of its own painting, largest
+      first.</p>
 
-    <h3>THE YEAR</h3>
-    <p>The scrubber weights every painting by how far its date is from the year you
-      are on, so the field is a moving window rather than a bin. The window widens
-      where the collection thins: coverage swings about sixtyfold between decades,
-      and three paintings is not a period's palette, it is three paintings. The
-      track under the year shows works per year, so the thin stretches stay
-      visible instead of being flattened. This is a survey of one museum's
-      public-domain holdings, not of art history.</p>
+    <h3>THE WHOLE SPAN, AND THE TIMELAPSE</h3>
+    <p>By default every painting is in the field at once: this is the colour of the
+      whole collection, 1311 to 1910. The timelapse is a second reading, not the
+      main one. It weights each painting by how far its date is from the year you
+      are on, so the field becomes a moving window rather than a bin, and the
+      window widens where the collection thins — coverage swings about sixtyfold
+      between decades, and three paintings is not a period's palette, it is three
+      paintings. The strip along the bottom shows works per year, so the thin
+      stretches stay visible instead of being flattened. This is a survey of one
+      museum's public-domain holdings, not of art history.</p>
 
     <h3>THE EDGE AT 1910</h3>
     <p>The field stops around 1910, and it stops rather than looping. That is a

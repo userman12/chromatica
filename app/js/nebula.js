@@ -41,6 +41,19 @@ export class Nebula {
     this.dpr = 1;
   }
 
+  /* The scan lines belong to the panel, not to the data: one 1-px line every 3 at
+     3.5% white, the same texture the surface had before, so the field reads as a
+     lit instrument rather than as a web page. It is uniform across the whole
+     canvas, so it cannot make one measured colour look different from another. */
+  buildScanlines() {
+    const tile = document.createElement("canvas");
+    tile.width = 1; tile.height = 3;
+    const c = tile.getContext("2d");
+    c.fillStyle = "#ffffff09";
+    c.fillRect(0, 0, 1, 1);
+    this.scan = this.ctx.createPattern(tile, "repeat");
+  }
+
   resize(cssW, cssH) {
     this.dpr = Math.min(window.devicePixelRatio || 1, 2);
     this.cssW = cssW; this.cssH = cssH;
@@ -50,8 +63,15 @@ export class Nebula {
     this.bed.height = Math.max(1, Math.round(cssH * GLOW_SCALE));
   }
 
-  /** @param {import("./field.js").Field} field */
-  draw(field, selected) {
+  /**
+   * @param {import("./field.js").Field} field
+   * @param {number} selected
+   * @param {number} intensity Global alpha scale. The whole collection at once puts
+   *   roughly eight times more colour on the canvas than one period does, and at
+   *   full alpha it stops being a cloud and becomes a slab; this thins it back down
+   *   without touching a single hue.
+   */
+  draw(field, selected, intensity = 1) {
     const TAU = Math.PI * 2;
     const { x, y, w, rad, css, order, n } = field;
 
@@ -67,7 +87,7 @@ export class Nebula {
       if (wt === 0) continue;
       const c = css[i];
       if (c !== lastFill) { g.fillStyle = c; lastFill = c; }
-      g.globalAlpha = wt * GLOW_ALPHA;
+      g.globalAlpha = wt * GLOW_ALPHA * intensity;
       g.beginPath();
       g.arc(x[i] * S, y[i] * S, Math.max(0.7, rad[i] * S * GLOW_SPREAD), 0, TAU);
       g.fill();
@@ -92,15 +112,21 @@ export class Nebula {
       const c = css[i];
       if (c !== lastFill) { ctx.fillStyle = c; lastFill = c; }
       const r = rad[i];
-      ctx.globalAlpha = wt * HALO_ALPHA;
+      ctx.globalAlpha = wt * HALO_ALPHA * intensity;
       ctx.beginPath();
       ctx.arc(x[i], y[i], r * HALO_SPREAD, 0, TAU);
       ctx.fill();
-      ctx.globalAlpha = wt * CORE_ALPHA;
+      ctx.globalAlpha = wt * CORE_ALPHA * intensity;
       ctx.beginPath();
       ctx.arc(x[i], y[i], r * CORE_SPREAD, 0, TAU);
       ctx.fill();
     }
+
+    // --- panel texture ---
+    if (!this.scan) this.buildScanlines();
+    ctx.globalAlpha = 1;
+    ctx.fillStyle = this.scan;
+    ctx.fillRect(0, 0, this.cssW, this.cssH);
 
     // --- the one interface mark allowed inside the field ---
     if (selected >= 0 && w[selected] > 0) {

@@ -9,7 +9,8 @@ from the photograph of one real painting in the Metropolitan Museum of Art's
 public domain collection. Nothing is decorative: no colour was chosen, corrected
 or invented, and every particle is clickable back to the work it came from.
 
-Drag the year. The whole field recomposes.
+The whole collection is on screen at once. Switch on the timelapse and the field
+recomposes century by century.
 
 Built by [@userluke_](https://x.com/userluke_).
 
@@ -171,8 +172,8 @@ than by the painter.
 GitHub Actions workflow uploads the directory as-is.
 
 The 11,728 colours are **particles in a field**, one per (painting, cluster).
-There is no grid, no row, no cell and no border: only colour against black. The
-whole interface is a year and the track it slides on.
+There is no grid, no row, no cell and no border inside the field: only colour
+against black. Every control lives in the two HUD bars, never on the surface.
 
 ### Position is the colour space itself
 
@@ -190,28 +191,49 @@ dim cloud is a dark century.
 ### Density, without a bar
 
 The plane is histogrammed on a 6-unit Lab lattice, and each particle is pushed out
-from its exact coordinate in proportion to the share of the period's colour that
-falls in its cell — spread ∝ √(share), so a heavily used region swells and
+from its exact coordinate in proportion to the share of the shown collection's
+colour that falls in its cell — spread ∝ √(share), so a heavily used region swells and
 thickens while a rare one stays a few sparks. Displacement is measured in **cells,
 never in a fraction of the viewport**: the first version scaled it to the short
 side, ~558 px against a ~41 px cell, and dispersion swamped the chromatic geography
-into a featureless ball. Share is normalised within the period, so scrubbing
-changes the *shape* of the cloud instead of merely inflating it wherever the museum
-owns more paintings. Particle radius follows the cluster's rank within its own
-painting.
+into a featureless ball. Share is normalised within what is currently shown, so
+filtering or scrubbing changes the *shape* of the cloud instead of merely inflating
+it wherever the museum owns more paintings. Particle radius follows the cluster's
+rank within its own painting.
 
-### The year
+### Time is a weight, not a position
 
-Every painting is weighted by a Gaussian on its distance from the cursor, so the
-field is a moving window, not a bin, and it recomposes by exponential easing rather
-than snapping. σ is adaptive: the window grows until it holds ~110 works, between 9
-and 44 years. Unattended, the year drifts on its own; the first touch ends that
-drift permanently, so no second control is needed to stop it.
+**The default state is the whole collection at once** — all 2,555 paintings, all
+11,728 colours, 1311 to 1910, every painting weighted the same. That is the
+picture, and it is complete without touching anything.
+
+**The timelapse is a mode you switch on.** It replaces the flat weight with a
+Gaussian on each painting's distance from the cursor year, so the field is a moving
+window rather than a bin, and it recomposes by exponential easing rather than
+snapping. σ is adaptive: the window grows until it holds ~110 works, clamped
+between 9 and 44 years, because coverage swings about sixtyfold between decades and
+three paintings is not a period's palette. Both modes are the same loop — a `null`
+year *is* the flat weight — so nothing about the rendering or the density mechanism
+differs between them.
+
+The strip along the bottom is works per year on a linear axis, log-scaled in
+height: the only place the collection's real unevenness in time is visible, and the
+way into the timelapse. In the timelapse the lit span is the window currently
+contributing colour, so it visibly breathes open as the centuries thin.
+
+Because the whole span puts roughly eight times more colour on the canvas than one
+window does, a global alpha scale (~2,600 ÷ visible colours, clamped) keeps it a
+cloud rather than a slab. It touches alpha only; no hue is altered.
 
 ### Rendering
 
-**Canvas 2D**, two passes, flat typed arrays, no per-frame allocation — 11,728
-particles at 60 fps, `step()` in 0.33 ms.
+**Canvas 2D**, two passes, flat typed arrays, no per-frame allocation. `step()`
+costs 0.38 ms for all 11,728 particles; the draw is the budget, at ~14 ms for the
+full field and well under that for one window. Measured in headless Chrome at
+1440×900, dpr 2: ~30 fps with the whole collection up, ~55 fps in the timelapse,
+where responsiveness actually matters. The readout and the 600-bar strip are
+rewritten only when a value changes — repainting them every frame cost more than
+the particles did.
 
 - A **glow bed** at 0.34 resolution, drawn back full-size: the upscale *is* the
   blur, far cheaper than a real one, and it carries the atmosphere.
@@ -231,9 +253,10 @@ particles at 60 fps, `step()` in 0.33 ms.
 - The only accent-coloured mark inside the field is the 1 px ring around a
   selected particle. Nothing tints a measured colour.
 
-The track under the year plots works per year on a **linear** axis, log-scaled in
-height, with the active window lit — the one place the real, ~60×-uneven shape of
-the collection is visible.
+- The scan lines are drawn **into the canvas**, not over it in CSS: the field is
+  opaque, so a CSS overlay would have sat on top of the interface chrome as well.
+  One 1 px line every 3 at 3.5% white, uniform, so it cannot make one measured
+  colour look different from another.
 
 ### The optional second layer
 
@@ -243,8 +266,11 @@ survived the 4% floor, and the palette with hex values, the clicked one marked.
 Thumbnails are committed to the repo (stage 05) and land at 596–625 px on the long
 edge, median 624 — the target is set above the Met's web-size ceiling on purpose,
 so nothing is upscaled and nothing is discarded. The browser never requests an
-image from the Met. Keyboard: arrows ±1 year, Shift ±10, PageUp/Down ±50,
-Home/End, Escape closes. `?y=1600` deep-links a year.
+image from the Met. Hovering names the work and prints the hex under the cursor.
+A school filter narrows the field to one tradition's own colour rather than
+averaging it into everyone else's. Keyboard, in the timelapse: arrows ±1 year,
+Shift ±10, PageUp/Down ±50, Home/End, space plays and pauses; Escape closes a
+panel. `?y=1600` deep-links straight into the timelapse at a year, paused.
 
 ### What the field actually shows
 
