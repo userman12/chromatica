@@ -37,6 +37,8 @@
  * Above MAT_L both effects are zero and nothing about the field has changed.
  */
 
+import { ORDER_BAND } from "./field.js";
+
 const ACCENT = "#00ff9d";
 const BG = "#0a0a0a";
 const GLOW_SCALE = 0.34;   // resolution of the blur bed
@@ -89,10 +91,11 @@ export class Nebula {
    * lost colours get the full correction.
    *
    * Built once per field: L* is a property of the measurement and never changes.
-   * field.order is sorted by lightness ascending and never re-sorted, so every
-   * particle needing a mat sits in one contiguous run at the head of it — which
-   * is why the mat can be its own pass with a single fillStyle rather than an
-   * interruption inside the colour-batched loops.
+   * field.order runs darkest-first and is never re-sorted, so every particle
+   * needing a mat sits in one run at the head of it — which is why the mat can be
+   * its own pass with a single fillStyle rather than an interruption inside the
+   * colour-batched loops. The run is not pure: ORDER_BAND lets lighter particles
+   * fall inside it, and those are skipped when drawing rather than excluded here.
    */
   liftFor(field) {
     if (this._liftSrc === field.lum) return;
@@ -101,7 +104,11 @@ export class Nebula {
     let end = 0;
     for (let k = 0; k < field.n; k++) {
       const i = field.order[k];
-      if (lum[i] >= MAT_L) break;
+      // Not "break at the first light one": order is jittered by up to ORDER_BAND
+      // either side of lightness, so a dark particle can sort after a lighter one.
+      // Past MAT_L + ORDER_BAND none can, which is where the run genuinely ends.
+      if (lum[i] >= MAT_L + ORDER_BAND) break;
+      if (lum[i] >= MAT_L) continue;
       const t = 1 - lum[i] / MAT_L;
       lift[i] = t * t;
       end = k + 1;
@@ -147,9 +154,9 @@ export class Nebula {
     g.fillStyle = "#ffffff";
     for (let k = 0; k < darkEnd; k++) {
       const i = order[k];
-      const wt = w[i];
-      if (wt === 0) continue;
-      g.globalAlpha = wt * lift[i] * MAT_ALPHA * MAT_GLOW * intensity;
+      const wt = w[i], lf = lift[i];
+      if (wt === 0 || lf === 0) continue;   // jitter puts some light ones in this run
+      g.globalAlpha = wt * lf * MAT_ALPHA * MAT_GLOW * intensity;
       g.beginPath();
       g.arc(x[i] * S, y[i] * S, Math.max(0.7, rad[i] * S * GLOW_SPREAD), 0, TAU);
       g.fill();
@@ -182,9 +189,9 @@ export class Nebula {
     ctx.fillStyle = "#ffffff";
     for (let k = 0; k < darkEnd; k++) {
       const i = order[k];
-      const wt = w[i];
-      if (wt === 0) continue;
-      ctx.globalAlpha = wt * lift[i] * MAT_ALPHA * intensity;
+      const wt = w[i], lf = lift[i];
+      if (wt === 0 || lf === 0) continue;
+      ctx.globalAlpha = wt * lf * MAT_ALPHA * intensity;
       ctx.beginPath();
       ctx.arc(x[i], y[i], rad[i] * MAT_SPREAD, 0, TAU);
       ctx.fill();

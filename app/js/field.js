@@ -74,6 +74,13 @@ const SEARCH_MAX = 110;    // how far sigmaAt looks for those works, in years
    hue geography smeared out of it. Position has to keep winning over density. */
 const SPREAD_FLOOR = 0.42; // blob radius for an average-density cell, in cells
 const MIN_SUPPORT = 30;    // works a window must hold before its chroma is drawn
+/* Width in L* of the band inside which draw order is randomised rather than
+   strictly darkest-first. Five is a few times the just-noticeable difference and
+   far below anything these blurred blobs communicate, so the arrangement still
+   reads as light-over-dark — it just stops being chronological where lightness
+   has nothing left to say. Exported because anything walking `order` on the
+   assumption that it is sorted by lightness needs to know the slack. */
+export const ORDER_BAND = 5;
 /* Chroma is read against a fixed axis rather than a per-filter one: the whole
    collection spans 14.5 to 25.6, so 10–30 shows the shape without the curve
    rescaling itself under a filter and making two schools look alike. */
@@ -151,11 +158,31 @@ export class Field {
      * bright neighbour punched a black hole in the cloud, which read as damage
      * rather than as measurement. Going darkest-first means the brighter of two
      * overlapping measurements is the one that survives, which is also what the
-     * eye expects of light against black. No colour is altered either way. */
+     * eye expects of light against black. No colour is altered either way.
+     *
+     * What that rule decided too much of, though, is contests it had no business
+     * deciding. 32,438 colours over a 100-point scale is a median gap of 0.003
+     * L* between neighbours in the order, so overlapping particles of visually
+     * identical lightness were still strictly ranked — by a difference no viewer
+     * can see, and on the 2,474 exact ties by construction order, which is
+     * chronological. Jittering the key by ORDER_BAND makes those a coin toss
+     * while leaving the arrangement intact at any distance the eye can read.
+     *
+     * It is a small correction and worth saying so: it changes who wins only
+     * between particles within 5 L* of each other. A colour is not rescued from
+     * under a much lighter neighbour by this, and should not be — that is what
+     * the mat in nebula.js is for.
+     *
+     * The jitter is hashed from the index, not drawn from Math.random, for the
+     * same reason the offsets above are: the field must recompose identically
+     * every time you scrub back to a year. */
     this.order = new Int32Array(n);
     for (let j = 0; j < n; j++) this.order[j] = j;
-    const lum = this.lum;
-    this.order.sort((a, b) => lum[a] - lum[b]);
+    const key = new Float64Array(n);
+    for (let j = 0; j < n; j++) {
+      key[j] = this.lum[j] + (hash01(j * 11 + 5) - 0.5) * ORDER_BAND;
+    }
+    this.order.sort((a, b) => key[a] - key[b]);
 
     // Density histogram over the plane, rebuilt every frame from the live weights.
     this.gw = Math.max(1, Math.ceil((maxA - minA) / CELL_LAB) + 1);
