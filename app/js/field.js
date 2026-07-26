@@ -267,7 +267,7 @@ export class Field {
     const drift = reduceMotion ? 0 : DRIFT_PX;
     const ease = reduceMotion || !this.placed ? 1 : EASE;
 
-    let colours = 0, from = this.y1, to = this.y0;
+    let colours = 0, from = this.y1, to = this.y0, moved = 0;
     for (let i = 0; i < n; i++) {
       const wt = this.w[i];
       if (wt === 0) continue;
@@ -284,8 +284,11 @@ export class Field {
       const tx = this.baseX(i) + this.jx[i] * reach;
       const ty = this.baseY(i) + this.jy[i] * reach;
 
-      this.x[i] += (tx - this.x[i]) * ease;
-      this.y[i] += (ty - this.y[i]) * ease;
+      const dx = (tx - this.x[i]) * ease, dy = (ty - this.y[i]) * ease;
+      this.x[i] += dx;
+      this.y[i] += dy;
+      const d = dx * dx + dy * dy;
+      if (d > moved) moved = d;
       // Dominant clusters read heavier; the faintest edge of the window stays small
       // so that fading in looks like arriving, not like growing. Kept small on
       // purpose: the cloud should be a mist that many particles build, not a
@@ -294,6 +297,12 @@ export class Field {
     }
 
     this.placed = true;
+    /* How far the fastest particle travelled this frame, in CSS px. The renderer
+     * uses it to decide whether the picture is worth redrawing: once the whole
+     * collection has settled, the only motion left is the idle breathing, which
+     * moves about 0.03 px per frame. Redrawing that 60 times a second repaints
+     * 11,728 particles to change nothing an eye can see. */
+    this.motion = Math.sqrt(moved);
     this.stats = { works, colours, from, to, sigma };
   }
 

@@ -228,12 +228,29 @@ cloud rather than a slab. It touches alpha only; no hue is altered.
 ### Rendering
 
 **Canvas 2D**, two passes, flat typed arrays, no per-frame allocation. `step()`
-costs 0.38 ms for all 11,728 particles; the draw is the budget, at ~14 ms for the
-full field and well under that for one window. Measured in headless Chrome at
-1440×900, dpr 2: ~30 fps with the whole collection up, ~55 fps in the timelapse,
-where responsiveness actually matters. The readout and the 600-bar strip are
-rewritten only when a value changes — repainting them every frame cost more than
-the particles did.
+costs 0.57 ms for all 11,728 particles; the draw is the budget, at ~14 ms for the
+full field and well under that for one window. Headless Chrome at 1440×900, dpr 2:
+**60 fps in both modes.**
+
+Three things had to be fixed to get there, and two of them were not the particles:
+
+- **The readout and the 600-bar strip are only rewritten when a value changes.**
+  Repainting four text nodes and 600 `fillRect`s every frame cost more than all
+  11,728 particles did.
+- **Canvas 2D is retained, so a frame in which nothing moved needs no draw call.**
+  Once the whole collection has settled, the only motion left is the idle
+  breathing — about 0.03 px per frame. `step()` reports the largest distance any
+  particle travelled, and the field is redrawn when the unpainted total passes
+  0.25 px: about 7 times a second instead of 60, for a picture that is identical
+  to within a quarter of a pixel on particles several pixels wide. The timelapse
+  reweights every particle on every frame, so there it always redraws.
+- A global alpha scale, as above, so the eightfold denser default is still a cloud.
+
+Colour is the one thing not optimised. 10,974 of the 11,728 particles are a
+distinct hex, so `fillStyle` is re-parsed for nearly every particle — about 3.4 ms
+per frame. Quantising the palette would collapse that to a few hundred parses, and
+would also mean the colours on screen are no longer the colours that were measured.
+It stays.
 
 - A **glow bed** at 0.34 resolution, drawn back full-size: the upscale *is* the
   blur, far cheaper than a real one, and it carries the atmosphere.

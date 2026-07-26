@@ -20,6 +20,13 @@ const PLAY_YEARS_PER_SEC = 7.5;   // the timelapse crawl
 const SCRUB_SLOP = 4;             // px of movement still counted as a click
 const STAGE_GAIN = 1.35;          // years per px when dragging on the field itself
 const INK = 2600;                 // target colours on screen, for the alpha normaliser
+/* Canvas 2D is retained: what was drawn stays on screen until something draws over
+ * it. So a frame in which nothing moved more than this needs no draw call at all —
+ * and the settled field, breathing at ~0.03 px per frame, is almost every frame.
+ * The number is a visible-motion threshold, not a frame budget: the displayed
+ * positions never lag the true ones by more than this, on particles whose blurred
+ * radius is an order of magnitude larger. */
+const REDRAW_PX = 0.25;
 
 const $ = (id) => document.getElementById(id);
 const el = {
@@ -59,6 +66,8 @@ const state = {
   // frame because it moves; the panel is not. Writing four readout nodes and 600
   // bars on every frame cost more than the 11,728 particles did.
   ui: {}, tlKey: "",
+  debt: 0,            // unpainted motion, in CSS px
+  dirty: true,        // something other than motion changed the picture
 };
 const nebula = new Nebula(el.field);
 
@@ -83,6 +92,7 @@ function measure() {
   state.tlW = el.timeline.clientWidth;
   state.tlH = el.timeline.clientHeight;
   state.tlKey = "";   // force the strip to redraw at the new size
+  state.dirty = true;
 }
 
 /* ---------- the loop ---------- */
@@ -110,7 +120,14 @@ function frame(now) {
   const colours = state.field.stats.colours;
   const intensity = colours > 0 ? clamp(INK / colours, 0.3, 1) : 1;
 
-  nebula.draw(state.field, state.selected, intensity);
+  // The timelapse reweights every particle on every frame, so there is always
+  // something new to draw. The whole-collection view usually has nothing.
+  state.debt += state.field.motion;
+  if (state.dirty || state.mode === "time" || state.debt >= REDRAW_PX) {
+    nebula.draw(state.field, state.selected, intensity);
+    state.debt = 0;
+    state.dirty = false;
+  }
   paintReadout();
   drawTimeline();
   requestAnimationFrame(frame);
@@ -206,6 +223,7 @@ function setMode(mode, { year = null, play = null } = {}) {
   if (timed && play !== null) state.playing = play && !reduceMotion;
   if (!timed) state.playing = false;
   state.ui = {}; state.tlKey = "";   // the panel is being rewritten from scratch
+  state.dirty = true;
 
   el.btnTimelapse.setAttribute("aria-pressed", String(timed));
   el.btnPlay.hidden = !timed;
@@ -319,6 +337,7 @@ function bindInput() {
   el.natFilter.addEventListener("change", () => {
     state.nat = Number(el.natFilter.value);
     state.tlKey = "";
+    state.dirty = true;   // particles leave the field without moving
     hideDetail();
   });
   el.btnInfo.addEventListener("click", () => { el.about.hidden = false; });
@@ -385,6 +404,7 @@ function showDetail(particle) {
   const p = state.data.paintings[F.owner[particle]];
   const thisHex = F.css[particle];
   state.selected = particle;
+  state.dirty = true;   // the ring is drawn on the canvas
   // The timelapse stops while you are looking at a work: the particle you clicked
   // would otherwise fade out from under the panel.
   setPlaying(false);
@@ -413,6 +433,7 @@ function showDetail(particle) {
 function hideDetail() {
   el.detail.hidden = true;
   state.selected = -1;
+  state.dirty = true;
 }
 
 /* ---------- init ---------- */
