@@ -359,6 +359,68 @@ export class Field {
   }
 
   /**
+   * The points the chroma curve singles out on its own: its highest, its lowest,
+   * and where it ends.
+   *
+   * The piece's argument was drawn as a line and then left unlabelled — you had
+   * to read the README to learn that the medieval peak is the highest colour in
+   * six centuries and that the Baroque trough is the lowest. These are the marks
+   * that say so on the strip itself.
+   *
+   * Measured off the curve rather than written down from the README, and taken
+   * per school, because a marker has to sit *on* the line that is actually being
+   * drawn: hardcoding 1339 would put a dot in mid-air the moment anyone filtered
+   * to the Dutch, whose own highest year is 1891. Where a school is too thin for
+   * the curve to be drawn at all there are no marks either — the same rule, not
+   * a second one.
+   *
+   * The year is not the claim. The curve is smoothed with sigmaAt's window, which
+   * is 19 years wide at the medieval peak, so the argmax names a neighbourhood
+   * and the mark carries its own sigma to say how wide. The end mark is dropped
+   * when it falls near one of the other two, which is what happens to a school
+   * that peaks late: it would be labelling the same place twice.
+   *
+   * Cached per school like the curve it reads, and for the same reason — neither
+   * depends on the year, the search or the layout, so neither is ever recomputed.
+   *
+   * @param {number} nat school index, or -1 for all
+   * @returns {{kind: string, year: number, v: number, sigma: number, share: number}[]}
+   */
+  chromaMarks(nat = -1) {
+    this._marks ??= new Map();
+    const hit = this._marks.get(nat);
+    if (hit) return hit;
+
+    const { v, ok } = this.chromaCurve(nat);
+    let hi = -1, lo = -1, end = -1;
+    for (let i = 0; i < v.length; i++) {
+      if (!ok[i]) continue;
+      if (hi < 0 || v[i] > v[hi]) hi = i;
+      if (lo < 0 || v[i] < v[lo]) lo = i;
+      end = i;
+    }
+
+    const out = [];
+    if (hi >= 0) {
+      const mark = (kind, i) => ({
+        kind,
+        year: this.y0 + i,
+        v: v[i],
+        sigma: Math.round(this.sigmaAt(this.y0 + i)),
+        share: v[i] / v[hi],
+      });
+      out.push(mark("hi", hi), mark("lo", lo));
+      // Far enough from both to be a third reading rather than a second label on
+      // one of the first two.
+      const clear = (i) => Math.abs(end - i) > v.length * 0.08;
+      if (clear(hi) && clear(lo)) out.push(mark("end", end));
+    }
+
+    this._marks.set(nat, out);
+    return out;
+  }
+
+  /**
    * Narrow by title or artist — by dimming, never by removing.
    *
    * 7,094 works and no way to reach one by name: you found a painting by moving

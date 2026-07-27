@@ -253,7 +253,10 @@ button[aria-pressed="true"] {
 /* ---------- span overview ----------
    Works per year on a linear axis: the only place the collection's real, ~60×
    uneven shape in time is visible — and the way into the timelapse. */
-.timeline { display: flex; align-items: center; gap: 9px; }
+/* Relative so the chip that names a mark can be placed against the strip. It has
+   to be its own element rather than the field's `.hoverchip`, which is positioned
+   in coordinates local to `.stage` and would land in the middle of the cloud. */
+.timeline { display: flex; align-items: center; gap: 9px; position: relative; }
 .timeline__label {
   font-size: 8px; letter-spacing: .14em; color: #3c423e;
   white-space: nowrap; flex: 0 0 auto;
@@ -262,6 +265,23 @@ button[aria-pressed="true"] {
   flex: 1 1 auto; height: 26px; display: block;
   cursor: ew-resize; touch-action: none;
 }
+#timelineCanvas.is-onmark { cursor: pointer; }
+
+/* The name of the mark under the pointer. Sits above the strip rather than below
+   it — the strip is the last thing on the page, and a chip hanging off the bottom
+   would be clipped by the window on every reading. Bordered in the curve's own
+   near-white, not the accent: the mark labels the line, and the accent in this
+   footer already means the histogram and the timelapse handle. */
+.markchip {
+  position: absolute; bottom: calc(100% + 7px); left: 0;
+  pointer-events: none; z-index: 15;
+  background: #050505f2; border: 1px solid var(--text-bright);
+  padding: 5px 8px; max-width: 260px;
+  font-size: 10px; line-height: 1.5; color: var(--text-bright);
+  box-shadow: 0 6px 26px #000000cc;
+}
+.markchip b { color: var(--text-bright); font-weight: 500; display: block; }
+.markchip i { color: #6f7671; font-style: normal; display: block; }
 
 /* ---------- panels ---------- */
 .panel {

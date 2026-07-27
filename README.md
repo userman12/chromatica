@@ -492,6 +492,16 @@ guessing — the Dutch curve, for instance, exists for 95 of the 602 years. Read
 against a fixed 10–30 axis, so switching schools cannot make a thin one look
 richer just by rescaling.
 
+The curve's own extremes are marked on it: the highest year, the lowest, and
+where it ends. They are measured off the line being drawn rather than copied from
+the numbers above, because they follow the school filter too — filter to the
+Dutch and the highest mark moves to 1891, which is that school's peak and not the
+collection's. Hovering one names it, and clicking one opens the timelapse there,
+which is what clicking anywhere on the strip already did; the mark only makes the
+landing exact. The label gives the smoothing window beside the year for the same
+reason the curve is smoothed at all — at the medieval peak that window is 19
+years wide, so the highest point names a neighbourhood, not a date, and says so.
+
 ## Attribution
 
 Images and metadata, all CC0 1.0:

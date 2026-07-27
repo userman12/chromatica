@@ -49,6 +49,7 @@ const el = {
   btnTimelapse: $("btnTimelapse"), btnPlay: $("btnPlay"),
   btnReset: $("btnReset"), btnInfo: $("btnInfo"),
   timeline: $("timelineCanvas"), timelineLabel: $("timelineLabel"),
+  markChip: $("markChip"),
   about: $("about"), aboutClose: $("aboutClose"),
   aboutMethod: $("aboutMethod"), aboutSource: $("aboutSource"),
   detail: $("detail"), detailClose: $("detailClose"), detailImg: $("detailImg"),
@@ -78,6 +79,7 @@ const state = {
   preview: -1,        // particle ringed by pointing at a result row, not selected
   listKey: null,      // field.viewKey the list was built from
   hover: -1,
+  tlMark: -1,         // index into field.chromaMarks(nat), the one under the pointer
   cssW: 0, cssH: 0,
   tlW: 0, tlH: 0,
   // Last values written to the DOM and to the strip. The field is redrawn every
@@ -274,8 +276,8 @@ function drawTimeline() {
   // nat belongs in both keys: the curve follows the filter, so a school change
   // has to invalidate the strip even mid-timelapse, where it once did not.
   const key = timed
-    ? `t|${from}|${to}|${Math.round(state.cursor)}|${state.nat}|${state.nat2}`
-    : `a|${state.nat}|${state.nat2}`;
+    ? `t|${from}|${to}|${Math.round(state.cursor)}|${state.nat}|${state.nat2}|${state.tlMark}`
+    : `a|${state.nat}|${state.nat2}|${state.tlMark}`;
   if (key === state.tlKey) return;
   state.tlKey = key;
 
@@ -312,6 +314,7 @@ function drawTimeline() {
   const [cLo, cHi] = CHROMA_AXIS;
   const top = h * 0.12, span = h * 0.66;
   const yOf = (c) => top + span * (1 - clamp((c - cLo) / (cHi - cLo), 0, 1));
+  const marks = F.chromaMarks(state.nat);
 
   /* Both curves are the same near-white and are told apart by stroke, not by
      colour: the strip already spends green on the histogram and the handle, and a
@@ -344,6 +347,47 @@ function drawTimeline() {
   // Second first, so the school in the main filter is the one on top.
   if (state.nat2 >= 0) strokeCurve(state.nat2, true);
   strokeCurve(state.nat, false);
+
+  /* --- the curve's own extremes, marked --- */
+  /* The line already draws the argument the piece is about — colour at its
+     highest in the 14th century, at its lowest in the Baroque, never recovering
+     — and then said none of it. These are the marks that do.
+
+     In the curve's own near-white, never in the accent: the strip already spends
+     green on the histogram and on the timelapse handle, and a third green thing
+     would read as a third measurement rather than as a label of the line it sits
+     on. Ringed on a dark disc for the same reason the curve is stroked twice —
+     over a lit bar of nearly its own weight, an unringed dot disappears.
+
+     They are not a fourth kind of control. Clicking one opens the timelapse at
+     its year, which is what clicking anywhere on this strip already did; the mark
+     only makes the landing exact and gives the point a name. */
+  for (let m = 0; m < marks.length; m++) {
+    const mk = marks[m];
+    const px = xOf(mk.year) + barW / 2, py = yOf(mk.v);
+    const on = m === state.tlMark;
+    const r = (on ? 3.6 : 2.5) * dpr;
+
+    ctx.globalAlpha = 1;
+    ctx.fillStyle = "#0a0a0a";
+    ctx.beginPath();
+    ctx.arc(px, py, r + 1.7 * dpr, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.strokeStyle = "#e8f5ef";
+    ctx.lineWidth = Math.max(1, 1.2 * dpr);
+    ctx.beginPath();
+    ctx.arc(px, py, r, 0, Math.PI * 2);
+    ctx.stroke();
+
+    // Filled only under the pointer, so the one being read is the one named.
+    if (on) {
+      ctx.fillStyle = "#e8f5ef";
+      ctx.beginPath();
+      ctx.arc(px, py, r - 1.5 * dpr, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
 
   // baseline, and the handle only when there is a year to point at
   ctx.globalAlpha = 1;
@@ -524,6 +568,7 @@ function setSchools(nat) {
   // second school" comparison is only hidden for now, not torn out.
   state.nat2 = -1;
   el.natFilter.value = String(state.nat);
+  setTimelineMark(-1);   // the marks belong to the old school; the index would be stale
   state.tlKey = "";
   state.dirty = true;   // particles leave the field without moving
   paintTimelineLabel();
@@ -656,18 +701,88 @@ function yearAtTimeline(clientX) {
   return state.field.y0 + f * (state.field.y1 - state.field.y0);
 }
 
+const MARK_GRAB = 9;   // px either side of a mark that count as being on it
+
+/** Which extreme the pointer is over, or -1.
+ *
+ *  Tested on x only, though the marks sit at a height as well. The strip is 26px
+ *  tall and a mark is 5px across: asking for the pointer to be on the curve too
+ *  would make a target most people would miss. There is nothing to lose by being
+ *  generous — a click that lands on a mark and a click that lands beside it both
+ *  open the timelapse near that year, so a false positive costs a few years of
+ *  cursor, not a wrong action. */
+function markAtTimeline(clientX) {
+  const F = state.field;
+  const marks = F.chromaMarks(state.nat);
+  if (!marks.length) return -1;
+  const rect = el.timeline.getBoundingClientRect();
+  const x = clientX - rect.left;
+  const perYear = rect.width / (F.y1 - F.y0 + 1);
+  for (let i = 0; i < marks.length; i++) {
+    const mx = (marks[i].year - F.y0 + 0.5) * perYear;
+    if (Math.abs(x - mx) <= MARK_GRAB) return i;
+  }
+  return -1;
+}
+
+const MARK_TEXT = {
+  hi: "HIGHEST MEAN CHROMA",
+  lo: "LOWEST MEAN CHROMA",
+  end: "WHERE THE FIELD ENDS",
+};
+
+/** Name the mark under the pointer, or clear it.
+ *
+ *  The year is deliberately not given as a year. The curve is smoothed with the
+ *  same adaptive window the field uses, 19 years wide at the medieval peak, so
+ *  the highest point names a neighbourhood and printing "1339" alone would claim
+ *  a precision the smoothing already spent. The window is printed beside it. */
+function setTimelineMark(index, clientX) {
+  if (index !== state.tlMark) {
+    state.tlMark = index;
+    state.tlKey = "";   // the filled ring is part of the strip, so the strip redraws
+  }
+  if (index < 0) { el.markChip.hidden = true; return; }
+
+  const mk = state.field.chromaMarks(state.nat)[index];
+  const share = Math.round(mk.share * 100);
+  el.markChip.innerHTML =
+    `<b>${MARK_TEXT[mk.kind]} ${mk.v.toFixed(1)}</b>`
+    + `<i>AROUND ${mk.year} · SMOOTHED OVER ±${mk.sigma} YEARS</i>`
+    + (mk.kind === "hi" ? "" : `<i>${share}% OF THIS CURVE'S HIGHEST</i>`);
+  el.markChip.hidden = false;
+
+  // Kept inside the strip, measured rather than guessed from the text length.
+  const rect = el.timeline.getBoundingClientRect();
+  const box = el.markChip.getBoundingClientRect();
+  const x = clamp(clientX - rect.left - box.width / 2, 0, rect.width - box.width);
+  el.markChip.style.left = `${x}px`;
+}
+
 function bindInput() {
   /* --- the strip: scrubs in the timelapse, and is the way into it otherwise --- */
   let onStrip = false;
   el.timeline.addEventListener("pointerdown", (event) => {
     onStrip = true;
     el.timeline.setPointerCapture(event.pointerId);
-    const year = yearAtTimeline(event.clientX);
+    // On a mark, the mark's own year rather than the one under the finger: the
+    // whole point of the mark is that it names an exact place on the curve.
+    const m = markAtTimeline(event.clientX);
+    const year = m >= 0
+      ? state.field.chromaMarks(state.nat)[m].year
+      : yearAtTimeline(event.clientX);
     if (state.mode !== "time") setMode("time", { year, play: false });
     else { setCursor(year); setPlaying(false); }
   });
   el.timeline.addEventListener("pointermove", (event) => {
-    if (onStrip && state.mode === "time") setCursor(yearAtTimeline(event.clientX));
+    if (onStrip && state.mode === "time") { setCursor(yearAtTimeline(event.clientX)); return; }
+    const m = markAtTimeline(event.clientX);
+    setTimelineMark(m, event.clientX);
+    el.timeline.classList.toggle("is-onmark", m >= 0);
+  });
+  el.timeline.addEventListener("pointerleave", () => {
+    setTimelineMark(-1);
+    el.timeline.classList.remove("is-onmark");
   });
   const releaseStrip = () => { onStrip = false; };
   el.timeline.addEventListener("pointerup", releaseStrip);
