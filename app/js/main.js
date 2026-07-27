@@ -542,7 +542,12 @@ function setSchools(nat, nat2) {
 function setQuery(query) {
   state.query = query;
   state.field.setSearch(query);
-  if (el.search.value !== query) el.search.value = query;
+  /* The box is only written when it does not already say this, *ignoring* the
+     spaces at its ends — because the query is trimmed and every space is a
+     trailing space at the moment it is typed. Comparing the raw value put the
+     trimmed string straight back into the box on that keystroke, so a space could
+     never be entered and `leonardo da vinci` had to be typed as one word. */
+  if (el.search.value.trim() !== query) el.search.value = query;
   state.matchAt = -1;   // a different question has a different set of answers
   state.matchTotal = 0;
   state.dirty = true;   // alpha and radius change; nothing moves
