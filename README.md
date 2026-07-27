@@ -400,13 +400,12 @@ hex values, the clicked one marked. Thumbnails are committed to the repo (stage
 sources actually carry, so nothing is upscaled and nothing is discarded. The
 browser never requests an image from a museum. Hovering names the work and prints the hex under the cursor.
 A school filter narrows the field to one tradition's own colour rather than
-averaging it into everyone else's, and a second filter beside it puts two schools
-on the field together — the comparison the data invites most is one tradition
-against another over the same centuries, and one filter could only ever answer
-half of it. Each school gets its own chroma curve in the strip, the first solid
-and the second dashed, both in the same near-white and against the same fixed
-axis so they are directly comparable. The Dutch sit at 14.3 in 1650 against the
-Italians' 15.1, and the strip says so without either curve rescaling itself.
+averaging it into everyone else's. A second filter that put two schools on the
+field together, each with its own chroma curve in the strip, was built and then
+pulled back out — on the field it read as one filter or the other, not as a
+comparison, so it is hidden for now rather than shipped half-understood. The
+plumbing (`nat2` in the state, the URL param, the dashed curve) is still there
+for whenever it gets a form people can actually read at a glance.
 
 **Search dims rather than filters.** Typing a title or an artist into FIND fades
 everything that does not answer to 22% instead of removing it, so the matches are
@@ -456,8 +455,8 @@ and diffing the rectangle of each control: across all switches, zero pixels.
 
 **The view is in the URL**, so a reading of the field can be handed to someone:
 `?y=1600` opens the timelapse at a year, paused, `?plane=1` on the chromatic
-plane, `?nat=3` narrowed to one school and `?nat2=5` against a second,
-`?q=rembrandt` with a search standing, and `?w=met.437240.2` with a particular
+plane, `?nat=3` narrowed to one school, `?q=rembrandt` with a search standing,
+and `?w=met.437240.2` with a particular
 painting open — collection, catalogue number, and which cluster of its palette
 was clicked, rather than a particle index that the next rebuild of the dataset
 would invalidate. Written with `replaceState`, never `pushState`: the back button
@@ -490,8 +489,8 @@ window the field itself uses — so the curve is blurred exactly as much as the
 cloud above it, and for the same reason. It follows the school filter, and where
 a filter leaves the window holding fewer than 30 works the line stops rather than
 guessing — the Dutch curve, for instance, exists for 95 of the 602 years. Read
-against a fixed 10–30 axis, so two schools cannot be made to look alike by each
-rescaling to its own range.
+against a fixed 10–30 axis, so switching schools cannot make a thin one look
+richer just by rescaling.
 
 ## Attribution
 

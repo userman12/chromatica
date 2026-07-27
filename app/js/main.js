@@ -44,7 +44,7 @@ const el = {
   axes: $("axes"), btnLayout: $("btnLayout"),
   cursorLabel: $("cursorLabel"), cursorValue: $("cursorValue"),
   cursorRange: $("cursorRange"), cursorSpan: $("cursorSpan"),
-  natFilter: $("natFilter"), natFilter2: $("natFilter2"),
+  natFilter: $("natFilter"),
   search: $("search"), searchCount: $("searchCount"), searchList: $("searchList"),
   btnTimelapse: $("btnTimelapse"), btnPlay: $("btnPlay"),
   btnReset: $("btnReset"), btnInfo: $("btnInfo"),
@@ -441,9 +441,7 @@ function applyURL() {
       && el.natFilter.querySelector(`option[value="${n}"]`) ? n : -1;
   };
   const nat = school("nat");
-  // setSchools, not the fields directly: a URL naming a second school and no
-  // first, or the same school twice, has to collapse the same way the UI does.
-  if (nat >= 0) setSchools(nat, school("nat2"));
+  if (nat >= 0) setSchools(nat);
 
   if (q.get("plane") === "1") setLayout(false);
 
@@ -520,12 +518,12 @@ function paintTimelineLabel() {
     + (state.mode === "time" ? "DRAG TO SCRUB" : "CLICK FOR TIMELAPSE");
 }
 
-function setSchools(nat, nat2) {
+function setSchools(nat) {
   state.nat = nat;
-  state.nat2 = nat < 0 || nat2 === nat ? -1 : nat2;
+  // nat2 stays wired through step()/paintTimelineLabel/the URL — the "against a
+  // second school" comparison is only hidden for now, not torn out.
+  state.nat2 = -1;
   el.natFilter.value = String(state.nat);
-  el.natFilter2.value = String(state.nat2);
-  el.natFilter2.disabled = state.nat < 0;
   state.tlKey = "";
   state.dirty = true;   // particles leave the field without moving
   paintTimelineLabel();
@@ -724,18 +722,14 @@ function bindInput() {
   el.btnPlay.addEventListener("click", () => setPlaying(!state.playing));
   el.btnLayout.addEventListener("click", () => setLayout(!state.chrono));
   el.btnReset.addEventListener("click", () => {
-    setSchools(-1, -1);
+    setSchools(-1);
     setQuery("");
     hideDetail();
     setLayout(true);
     setMode("all");
   });
   el.natFilter.addEventListener("change", () => {
-    setSchools(Number(el.natFilter.value), state.nat2);
-    hideDetail();
-  });
-  el.natFilter2.addEventListener("change", () => {
-    setSchools(state.nat, Number(el.natFilter2.value));
+    setSchools(Number(el.natFilter.value));
     hideDetail();
   });
   // "search" inputs fire input on the browser's own clear button too, so one
@@ -929,7 +923,6 @@ function fillFilter(data) {
     `<option value="${n}">${escapeHtml(data.meta.nationalities[n] || "?")} (${c})</option>`)
     .join("");
   el.natFilter.innerHTML = `<option value="-1">ALL</option>${options}`;
-  el.natFilter2.innerHTML = `<option value="-1">NONE</option>${options}`;
 }
 
 async function init() {

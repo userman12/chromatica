@@ -224,7 +224,6 @@ body { display: flex; flex-direction: column; }
    they are told apart by stroke, and these are the same stroke at label size. */
 .key { display: inline-block; width: 13px; vertical-align: middle; }
 .key--a { border-top: 1px solid var(--text-bright); }
-.key--b { border-top: 1px dashed var(--text-bright); }
 select:disabled { opacity: .4; cursor: not-allowed; }
 select {
   appearance: none; background: #111; color: var(--text-bright);
