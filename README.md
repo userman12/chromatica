@@ -18,6 +18,92 @@ Built by [@userluke_](https://x.com/userluke_).
 
 ---
 
+## Using it
+
+Open **[userman12.github.io/chromatica](https://userman12.github.io/chromatica/)**.
+Nothing needs to be configured and nothing is behind a click: the default state is
+the whole collection at once, 7,094 paintings and 32,350 measured colours, 1309 to
+1910. Everything below is optional.
+
+### Four things to try first
+
+| | |
+|---|---|
+| **Click any particle** | Opens the painting it was measured from, with its full palette, the clicked colour marked, and a link to the museum that holds it. |
+| **Press CHROMATIC PLANE** | The same colours restack by hue instead of by date. Nothing is refiltered — the cloud morphs, which is the point: one set of measurements read two ways. |
+| **Press TIMELAPSE, then drag the strip** | Time stops being a position and becomes a weight. The field thins to one period and walks through six centuries. |
+| **Open a painting and press COLOURS LIKE THIS ONE** | The nearest two dozen paintings *by colour* — across schools and across centuries. See below. |
+
+### The controls
+
+- **FIND** — type a title or an artist. It **dims rather than filters**: everything
+  that does not answer fades to 22% instead of disappearing, so you read the answer
+  against the collection it came out of. Terms match in any order and accents are
+  folded, so `cezanne` finds Cézanne. Matching works get a thin ring on the field
+  *and* are named in a list beside the box.
+- **COLOURS LIKE THIS ONE** — the question the field can answer that no amount of
+  typing can reach. From an open painting, it ranks every other work by how near
+  its closest measured colour comes to the one you clicked — straight-line distance
+  in CIE L\*a\*b\*, lightness included — and returns the nearest 24. The answer
+  arrives through exactly the same machinery as a text search: same rings, same
+  named list, same walk with Enter. The list header states the colour it was given
+  and the ΔE it actually had to reach, which is the number that says whether "like
+  this" is a strong claim here or a weak one. Across the collection that reach is
+  usually about **2.2**, roughly the threshold of perception — so those two dozen
+  works genuinely share a colour.
+- **SCHOOL** — narrows the field to one tradition's own colour rather than
+  averaging it into everyone else's. The chroma curve under the field follows it.
+- **The strip along the bottom** — works per year as bars (the collection is ~60×
+  denser in the 1870s than the 1350s, and this is the only place that is visible),
+  with mean chroma drawn over them as a line. The three dots on that line are its
+  own extremes: highest, lowest, and where the field ends. Hover one to name it,
+  click one to open the timelapse there.
+- **RESET** puts everything back. **?** opens the method notes.
+
+### Keyboard
+
+| | |
+|---|---|
+| `Enter` / `Shift+Enter` | walk the search results forwards and back |
+| `←` `→` | ±1 year in the timelapse (`Shift` for ±10) |
+| `PageUp` / `PageDown` | ±50 years |
+| `Home` / `End` | first and last year |
+| `Space` | play / pause the timelapse |
+| `Escape` | close a panel; in the FIND box, clear it |
+
+### Any view can be linked
+
+The URL always describes what is on screen, so a reading of the field can be
+handed to someone: `?y=1600` opens the timelapse at a year, paused · `?plane=1` on
+the chromatic plane · `?nat=3` narrowed to one school · `?q=rembrandt` with a
+search standing · `?w=met.437240.2` with one painting open · `?near=met.437240.2`
+with that painting's colour being asked about. Written with `replaceState`, so
+the back button leaves the page rather than walking back through every year you
+scrubbed past. Details under
+[The optional second layer](#the-optional-second-layer).
+
+### Running it locally
+
+The app is static — no build step, no dependencies, no bundler. But it uses ES
+modules and `fetch`, so it needs to be *served*; opening `index.html` from the
+filesystem will not work.
+
+```bash
+git clone https://github.com/userman12/chromatica && cd chromatica/app
+python3 -m http.server 8765
+# then open http://localhost:8765
+```
+
+That is the whole app: `app/index.html`, four JS modules, one stylesheet, one
+1.2 MB JSON and 7,094 committed thumbnails (249 MB). **It never contacts a museum** — the
+images were fetched and resized once, offline, by the pipeline.
+
+To rebuild the data from the sources instead, see [Pipeline](#pipeline). It takes
+about 25 minutes and re-downloads ~7,500 images, so it is only worth doing if you
+are changing how colour is measured.
+
+---
+
 ## Phase 1 — what the Met's data actually allows
 
 Findings that constrained everything downstream. All numbers are measured, not
@@ -216,7 +302,7 @@ Runs offline, once, and emits a static JSON plus thumbnails. **Production never
 touches a museum's servers** — images are fetched and resized exactly once here.
 
 ```bash
-python3 -m venv .venv && .venv/bin/pip install pillow numpy scikit-learn
+python3 -m venv .venv && .venv/bin/pip install pillow numpy scipy scikit-learn
 bash pipeline/00_download_csv.sh      # Met + National Gallery bulk CSVs
 .venv/bin/python pipeline/01_select.py            # all four sources -> 7,499 candidates
 .venv/bin/python pipeline/02_fetch_image_urls.py  # Met only: resolve primaryImageSmall
@@ -481,6 +567,52 @@ alone. Keyboard, in the timelapse: arrows ±1 year,
 Shift ±10, PageUp/Down ±50, Home/End, space plays and pauses; Escape closes a
 panel.
 
+**And a second way of asking the same question.** Text reaches a painting you can
+already name. But what this field measures is colour, not names, and *what else
+looks like this* is the question the data answers best and the one no amount of
+typing could reach — it finds works that have a colour in common with each other
+and nothing else, across schools and across centuries. It is offered from the
+panel a particle opened, on the swatch you actually clicked.
+
+What it deliberately does **not** do is build a second mechanism. It fills the
+same match array the text search fills, so the answer arrives as the same thin
+rings, the same named list, the same walk with Enter. Only the way the array is
+filled is different, which is why the two can never disagree about what an answer
+looks like.
+
+Distance is Euclidean in CIE L\*a\*b\* with lightness included — a pale rose and a
+deep crimson are not the same colour, and dropping L\* to match "hue" would say
+they were. It is ΔE76 rather than ΔE2000: the finer formula matters when grading
+print, and here it would only reorder works already indistinguishable. A
+painting's distance is its **nearest cluster's**, not its palette's average,
+because the question is whether the work *contains* this colour rather than
+whether the whole canvas is in this key — and that same cluster is the one that
+gets the ring, so the mark lands on the colour that was matched instead of on the
+work's largest patch. The source painting is excluded: it is the thing being
+asked about, and its own remaining clusters would otherwise take the first places
+in a list of what else is out there.
+
+A **count, not a threshold**, and that is a real choice. An ordinary brown has
+thousands of neighbours inside any radius worth calling close; a saturated cyan
+has four. A radius therefore answers a different question depending on where you
+click, while the nearest handful answers the same kind of question everywhere and
+then reports how far it had to reach. Measured over 400 sampled colours, that
+reach is a median of **2.2** — about the threshold of perception, so the two dozen
+works that come back genuinely share a colour rather than merely a colour family.
+The ΔE ceiling exists for the tail: it bites on 2 of those 400, both highly
+saturated, where returning ten or twenty works is honest and reaching further
+would not be.
+The list header prints the reach so the strength of the claim is visible rather
+than implied. One click costs 1.1 ms over 32,350 particles.
+
+The header also carries its own dismissal, because nothing else can: a text
+question is put away in the box that holds it, and binding a colour question to
+the panel it was asked from would end it every time you clicked past a particle —
+including on the way to reading one of its own answers. It survives an empty
+result too, which is reachable rather than theoretical: narrow to a small school,
+then ask about a colour, and the nearest two dozen are all real and none are in
+view.
+
 **Nothing in the interface moves.** The field is a canvas that fills whatever box
 the two bars leave it, so any control that changes size changes the picture: the
 play button appearing on TIMELAPSE used to shorten the field by 43 px, and
@@ -501,7 +633,11 @@ plane, `?nat=3` narrowed to one school, `?q=rembrandt` with a search standing,
 and `?w=met.437240.2` with a particular
 painting open — collection, catalogue number, and which cluster of its palette
 was clicked, rather than a particle index that the next rebuild of the dataset
-would invalidate. Written with `replaceState`, never `pushState`: the back button
+would invalidate. `?near=met.437240.2` names the same thing for the colour
+question, so "everything that looks like *this* colour of *that* Vermeer" is a
+link; it is read last at boot, because a colour question and a text question
+cannot both stand and a URL carrying one meant the one it names. Written with
+`replaceState`, never `pushState`: the back button
 should leave the page, not walk back through every year you scrubbed past.
 Nothing is written mid-timelapse — the URL says where you stopped, not which
 frame was on screen — and anything else already in the query string survives, so
