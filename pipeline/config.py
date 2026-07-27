@@ -216,6 +216,28 @@ BACKDROP_DARK_MAX_CHROMA = 6
 # vignetted or noisy surround and not enough to reach paint.
 BACKDROP_DARK_TOLERANCE = 14
 
+# The ring test asks what the *median* of the border is, so it only sees a
+# surround that dominates the border. A gable, an arched triptych or a cross-
+# shaped panel is black in the corners and painting everywhere else: at the size
+# k-means actually runs on, those rings measure as the painting -- median
+# (108,70,30), uniformity 0.23 -- and the black goes into the palette anyway.
+# That left 42 works still carrying exact #000000 after the ring fix.
+#
+# So a second pass, tried only where the ring test declines: find near-black
+# pixels, keep the connected components that touch the border, and judge that
+# region instead of the border average. Two numbers separate it cleanly from
+# paintings that are merely dark at the edge. Blackness -- the region's median
+# distance from (0,0,0) -- is 0.00 for all 42 of them, because letterboxing and
+# seamless black are mathematically exact, against a median of 5.15 for painted
+# grounds. And size: the real surrounds run 3.8% of the frame and up, while the
+# near-black that paintings happen to have touching their edge stays under 2.3%.
+# Zurbaran, Tintoretto and Sargent have no such region at all; a panel portrait
+# inset on black has a large one but at blackness 2.45, and the blackness test is
+# what excludes it.
+BACKDROP_CORNER_TOL = 12                # locating the region, not judging it
+BACKDROP_CORNER_MAX_BLACKNESS = 1.0     # region median distance from pure black
+BACKDROP_CORNER_MIN_SHARE = 0.035       # below this it is a shadow, not a surround
+
 # --- adaptive binning ----------------------------------------------------
 # Coverage is wildly uneven (4 paintings in the 1350s vs 245 in the 1870s), so
 # bins hold a roughly constant number of works instead of a fixed year span.

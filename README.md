@@ -110,8 +110,31 @@ collapse into `Other / unattributed`.
    removal by **border-connected region rather than by colour**, since a surround
    is not a colour but the part of that colour continuous with the edge — which
    is what lets a sitter's black coat survive while the black around a gable does
-   not. Validated over all 7,094: 605 corrected, **0 of 481** painted dark
-   grounds touched, and the light path strictly unchanged or gentler.
+   not.
+
+   That still left the shaped supports, and for a reason worth recording: the
+   ring test asks what the *median* of the border is, so it can only see a
+   surround that dominates the border. A gable, an arched triptych or a cross is
+   black in the corners and painting everywhere else, and at the 160 px k-means
+   actually runs on, those borders measure as the painting — median `(108,70,30)`,
+   uniformity 0.23. So a **second pass** runs where the first declines: find
+   near-black pixels, keep the connected components that reach the edge, and
+   judge that region rather than the border average. Two numbers separate it
+   cleanly. *Blackness*, the region's median distance from `(0,0,0)`, is **0.00**
+   for every one of the shaped panels, because letterboxing and seamless black
+   are mathematically exact, against **5.15** for painted grounds. And *size*:
+   real surrounds run 3.8% of the frame and up, while the near-black a painting
+   happens to have touching its edge stays under 2.3%. Zurbarán, Tintoretto and
+   Sargent have no such region at all; a panel portrait inset on black has a
+   large one at blackness 2.45, and blackness is what excludes it.
+
+   Validated over all 7,094: 839 caught by the ring, 236 by the corner pass, and
+   **not one** of 481 painted dark grounds wrongly stripped — the single control
+   that tripped turned out on inspection to be an arched triptych genuinely shot
+   on black, so it was the control set that was wrong. Zurbarán, Sargent and the
+   Clouet portrait come out of the whole intervention byte-identical to what they
+   were before any of it. Exact `#000000` survives in **4** palettes, down from
+   265.
 3. **Ivory portrait miniatures** — 719 works whose palettes are dominated by the
    ivory support and flesh tones, concentrated in 1790–1840. Excluded by medium.
 
@@ -240,8 +263,8 @@ to disk.
 | --- | --- |
 | 01 select | **7,499 candidates** · met 2,840 · nga 2,689 · aic 1,179 · cma 791, after cross-source dedup |
 | 02 image URLs | 2,840 resolved from the Met API · the other three carry their URL from selection |
-| 03 palettes | **7,105 usable** · 377 dropped as greyscale · 25 empty · 8 failed to fetch |
-| 04 build | 7,094 paintings · 32,387 measured colours · 1309–1910 · 1.2 MB |
+| 03 palettes | **7,105 usable** · 377 dropped as greyscale · 22 empty · 11 failed to fetch |
+| 04 build | 7,094 paintings · 32,350 measured colours · 1309–1910 · 1.2 MB |
 | 05 thumbs | 7,094 rendered · 0 failed · 596–640 px long edge · 247 MB committed |
 
 Per source in the published field: the Met 2,544, the National Gallery 2,689,
@@ -261,7 +284,7 @@ than by the painter.
 `app/` is plain static files — no bundler, no build step, no dependencies. The
 GitHub Actions workflow uploads the directory as-is.
 
-The 32,387 colours are **particles in a field**, one per (painting, cluster).
+The 32,350 colours are **particles in a field**, one per (painting, cluster).
 There is no grid, no row, no cell and no border inside the field: only colour
 against black. Every control lives in the two HUD bars, never on the surface.
 
@@ -294,7 +317,7 @@ rank within its own painting.
 ### Time is a weight, not a position
 
 **The default state is the whole collection at once** — all 7,094 paintings, all
-32,387 colours, 1309 to 1910, every painting weighted the same. That is the
+32,350 colours, 1309 to 1910, every painting weighted the same. That is the
 picture, and it is complete without touching anything.
 
 **The timelapse is a mode you switch on.** It replaces the flat weight with a
@@ -381,7 +404,7 @@ Three things had to be fixed to get there, and two of them were not the particle
   apart by at most 1.2 × 10⁻⁴ px — Float32 rounding in the identity, three orders
   of magnitude under the redraw threshold.
 
-Colour is the one thing not optimised. 30,203 of the 32,387 particles are a
+Colour is the one thing not optimised. 30,244 of the 32,350 particles are a
 distinct hex, so `fillStyle` is re-parsed for nearly every particle. Quantising the palette would collapse that to a few hundred parses, and
 would also mean the colours on screen are no longer the colours that were measured.
 It stays.
@@ -491,24 +514,25 @@ after the collection nearly tripled: it survived. The figures below are the chro
 curve's own extremes — the marks the strip draws and labels, so anything quoted
 here can be checked by hovering them in the app rather than taken on trust.
 
-The **late Middle Ages are the most chromatic period here** — chroma **26.6**
+The **late Middle Ages are the most chromatic period here** — chroma **27.0**
 around 1339, which is gold ground, vermilion and ultramarine, not mud. Saturation
-then falls for three centuries without interruption to a minimum of **14.6**
-around 1673, **55% of the medieval peak**: tenebrism, not archaism. Only after
+then falls for three centuries without interruption to a minimum of **14.7**
+around 1673, **54% of the medieval peak**: tenebrism, not archaism. Only after
 1700 does the curve turn back up, and it does not recover its 14th-century value
 before the field ends — 1910 stands at **16.9**, a little under two thirds of the
 1339 figure.
 
 Two corrections to what this section said before. The numbers have moved, because
-the studio-backdrop fix above removed 360 fake near-black particles concentrated
-in exactly the centuries this claim is about: the medieval peak rose a full point
-and the trough deepened from 57% to 55% of it, so the artefact had been flattening
-the argument from both ends. And the survey's **brightest** point is no longer
-1910 — with the black stripped off the gold-ground panels, 1384 now reads brighter
-(mean L\* 45.3 against 44.8). The earlier figures in this paragraph were also not
-reproducible from the committed dataset by any weighting tried, so they are best
-read as having gone stale across an earlier rebuild; these are stated with their
-method attached so the same cannot happen quietly again.
+the studio-backdrop fix above removed **468** fake near-black particles
+concentrated in exactly the centuries this claim is about: the medieval peak rose
+1.4 and the trough deepened from 57% to 54% of it, so the artefact had been
+flattening the argument from both ends at once. And the survey's **brightest**
+point is no longer 1910 — with the black stripped off the gold-ground panels,
+1384 now reads brighter (mean L\* 45.6 against 44.9). The earlier figures in this
+paragraph were also not reproducible from the committed dataset by any weighting
+tried, so they are best read as having gone stale across an earlier rebuild;
+these are stated with their method attached so the same cannot happen quietly
+again.
 
 Three more collections moved the trough about half a century later and shaved
 0.5 off the medieval peak; the shape did not change. The visualisation was not

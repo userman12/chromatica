@@ -73,6 +73,56 @@ def mean_chroma(arr):
 
 
 def detect_backdrop(arr):
+    """Return (backdrop RGB, removal tolerance) if the photograph has a studio
+    surround, else None.
+
+    Two kinds of evidence, tried in order, because a surround shows itself two
+    different ways. Usually it *is* the border, and the ring test below reads it
+    off the border's average. But a shaped support -- a gable, an arched
+    triptych, a cross -- is only black in the corners, so its border averages to
+    the painting and the ring test correctly declines; the corner test then looks
+    for the surround as a region instead of as an average.
+    """
+    # Explicit, not `or`: these return a tuple holding a numpy array, and
+    # leaning on truthiness there is the kind of thing that works until the
+    # shape changes.
+    ring = detect_ring_backdrop(arr)
+    return ring if ring is not None else detect_corner_surround(arr)
+
+
+def detect_corner_surround(arr):
+    """A surround that touches the border without dominating it.
+
+    Near-black pixels, restricted to the connected components that reach the
+    edge, judged on how exactly black they are and how much of the frame they
+    cover. Both tests are needed and neither is enough: paintings do have
+    near-black touching their edge, but it is small, and paintings that are large
+    and dark at the edge are never *exactly* black. See config for the two
+    distributions these thresholds sit between.
+    """
+    a = arr.astype(np.int16)
+    near = np.linalg.norm(a, axis=2) <= C.BACKDROP_CORNER_TOL
+    if not near.any():
+        return None
+    labels, count = ndimage.label(near)
+    if count == 0:
+        return None
+    edge = np.concatenate([labels[0], labels[-1], labels[:, 0], labels[:, -1]])
+    touching = np.unique(edge)
+    touching = touching[touching > 0]
+    if touching.size == 0:
+        return None
+    region = np.isin(labels, touching)
+    if region.mean() < C.BACKDROP_CORNER_MIN_SHARE:
+        return None                      # a shadow at the edge, not a surround
+    pixels = a[region]
+    blackness = float(np.median(np.linalg.norm(pixels, axis=1)))
+    if blackness > C.BACKDROP_CORNER_MAX_BLACKNESS:
+        return None                      # dark, but paint is never this exact
+    return np.median(pixels, axis=0), C.BACKDROP_CORNER_TOL
+
+
+def detect_ring_backdrop(arr):
     """Return (backdrop RGB, removal tolerance) if the border ring is a studio
     background, else None.
 
