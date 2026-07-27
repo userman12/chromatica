@@ -91,6 +91,22 @@ export const CHROMA_AXIS = [10, 30];
    of the field is still there, still the same shape, and no longer competing —
    and still above the 0.12 the picker needs, so a dimmed painting can be clicked. */
 const SEARCH_DIM = 0.22;
+/* "Colours like this one": how many works come back, and how far away the
+   farthest of them is allowed to be.
+
+   A count rather than a threshold, because a threshold answers a different
+   question depending on where you click. An ordinary brown has thousands of
+   neighbours inside any radius worth calling close; a saturated cyan has four.
+   Asking for the nearest handful gives the same kind of answer everywhere, and
+   the answer says how far it had to reach — the list prints the ΔE it actually
+   spanned rather than implying they are all the same colour.
+
+   The ceiling is the one thing the count cannot do on its own: without it an
+   isolated colour would return its 24 nearest anyway, at distances where
+   "like this" is no longer true. 16 is well past the point where two colours
+   read as versions of each other, so it only ever bites on the outliers. */
+const NEAR_WORKS = 24;
+const NEAR_CEILING = 16;
 const SPREAD_GAIN = 0.85;  // how much a cell's blob grows with its share
 const SPREAD_CAP = 2.1;    // no blob ever reaches further than this, in cells
 const EASE = 0.075;        // per-frame approach to the target position: fluid, not snapped
@@ -442,16 +458,105 @@ export class Field {
     // Folded haystack built once, on the first search rather than at boot: most
     // visits never type anything, and this is 7,094 string allocations.
     this.hay ??= this.paintings.map((p) => fold(`${p.t || ""} ${p.a || ""}`));
-    this.matchOf ??= new Float32Array(this.hay.length);
+    this._beginMatch();
     let matched = 0;
     for (let pi = 0; pi < this.hay.length; pi++) {
-      const hit = !this.searching || terms.every((term) => this.hay[pi].includes(term));
-      this.matchOf[pi] = hit ? 1 : SEARCH_DIM;
-      if (hit) matched++;
+      if (this.searching && !terms.every((term) => this.hay[pi].includes(term))) continue;
+      this.matchOf[pi] = 1;
+      matched++;
     }
     // The weights depend on the query, so the query is part of their key.
     this.searchKey = query;
     return this.searching ? matched : 0;
+  }
+
+  /**
+   * The other way of asking the same question: which works hold a colour like
+   * this one.
+   *
+   * Text finds a painting you can already name. But the thing measured here is
+   * not names, it is colour, and "what else looks like this" is the question the
+   * data answers best and the one no amount of typing could reach. It is the
+   * same question the chromatic plane answers geometrically — neighbours in Lab
+   * are neighbours on screen — asked of one particular colour and answered by
+   * name.
+   *
+   * Distance is plain Euclidean distance in CIE L*a*b*, lightness included: a
+   * pale rose and a deep crimson are not the same colour, and dropping L* to
+   * match "hue" would say they were. It is ΔE76 rather than ΔE2000; the finer
+   * formula rescales this space in ways that matter when you are grading print,
+   * and here it would only reorder works that are already indistinguishable.
+   *
+   * A painting's distance is its *nearest* cluster's, not its palette's average.
+   * The question is whether the work contains this colour, not whether the whole
+   * canvas is in this key — and the cluster that answers is the one that gets
+   * the ring, so the mark on the field lands on the colour that was matched
+   * rather than on the work's largest patch.
+   *
+   * The source painting is excluded. It is the thing being asked about, it is
+   * already open in the panel, and its own remaining clusters would otherwise
+   * take the first places in a list of what else is out there.
+   *
+   * Everything downstream is the text search's, unchanged: the same dimming, the
+   * same rings, the same list, the same walk with Enter. Only the way `matchOf`
+   * is filled is different.
+   *
+   * @param {number} particle the clicked colour
+   * @returns {{works: number, worst: number}} how many came back, and the ΔE of
+   *   the farthest of them — the reach the answer actually needed
+   */
+  setNear(particle) {
+    const L0 = this.lum[particle], a0 = this.lx[particle], b0 = this.ly[particle];
+    const self = this.owner[particle];
+    const P = this.paintings.length;
+
+    // Nearest cluster per painting, and which one it was. Squared distances
+    // throughout — the ordering is the same and the ceiling squares too, so the
+    // one sqrt that is taken is the one that gets printed.
+    this._nearD ??= new Float32Array(P);
+    this._nearI ??= new Int32Array(P);
+    this._nearD.fill(Infinity);
+    for (let i = 0; i < this.n; i++) {
+      const o = this.owner[i];
+      if (o === self) continue;
+      const dL = this.lum[i] - L0, da = this.lx[i] - a0, db = this.ly[i] - b0;
+      const d = dL * dL + da * da + db * db;
+      if (d < this._nearD[o]) { this._nearD[o] = d; this._nearI[o] = i; }
+    }
+
+    const cap = NEAR_CEILING * NEAR_CEILING;
+    const ranked = [];
+    for (let o = 0; o < P; o++) if (this._nearD[o] <= cap) ranked.push(o);
+    ranked.sort((x, y) => this._nearD[x] - this._nearD[y]);
+    const chosen = ranked.slice(0, NEAR_WORKS);
+
+    this._beginMatch();
+    for (const o of chosen) {
+      this.matchOf[o] = 1;
+      this.markOf[o] = this._nearI[o];
+    }
+    this.searching = chosen.length > 0;
+    // Distinct from any typed query — a search for the literal text "~1234"
+    // would fold to something else, and this never reaches the haystack anyway.
+    this.searchKey = `~${particle}`;
+    return {
+      works: chosen.length,
+      worst: chosen.length ? Math.sqrt(this._nearD[chosen[chosen.length - 1]]) : 0,
+    };
+  }
+
+  /** Clear the per-work match state both questions write into.
+   *
+   *  `matchOf` is what a work is worth when something is being asked and it is
+   *  not the answer; `markOf` is which of its particles should carry the ring,
+   *  or -1 for "whichever is drawn first", which is the largest cluster and is
+   *  what a text match wants. Allocated on first use, then only ever refilled. */
+  _beginMatch() {
+    const P = this.paintings.length;
+    this.matchOf ??= new Float32Array(P);
+    this.markOf ??= new Int32Array(P);
+    this.matchOf.fill(SEARCH_DIM);
+    this.markOf.fill(-1);
   }
 
   /**
@@ -561,7 +666,17 @@ export class Field {
             // worth putting a ring on. Collected here rather than in a pass of its
             // own: this loop already walks every particle and already knows which
             // owner it is meeting for the first time.
-            if (this.w[i] >= 0.12) this.marks[markN++] = i;
+            //
+            // Unless the question named a cluster of its own: a colour search
+            // matched one particular patch, and ringing the largest one instead
+            // would put the mark on a colour that had nothing to do with the
+            // answer. Safe to substitute here — every cluster of a work shares
+            // its year and its school, so `wt` is identical across them and the
+            // gate above decides the same way for all five.
+            if (this.w[i] >= 0.12) {
+              const named = this.markOf[o];
+              this.marks[markN++] = named >= 0 ? named : i;
+            }
           }
         }
       }

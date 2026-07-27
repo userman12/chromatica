@@ -58,7 +58,7 @@ const el = {
   detailSource: $("detailSource"), aboutSources: $("aboutSources"),
   hudBlurbScope: $("hudBlurbScope"),
   detailPalette: $("detailPalette"), detailSwatches: $("detailSwatches"),
-  detailLink: $("detailLink"),
+  detailLink: $("detailLink"), btnNear: $("btnNear"),
 };
 
 const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -72,6 +72,8 @@ const state = {
   nat: -1,            // school filter, -1 for all
   nat2: -1,           // a second school shown beside the first, -1 for none
   query: "",          // free text over title and artist; dims, never removes
+  near: -1,           // the colour being asked about, or -1; the other question
+  nearInfo: null,     // {hex, worst} — what that question was, for the list header
   selected: -1,       // particle index
   matchAt: -1,        // position in the current list of matches, -1 = not stepping
   matchTotal: 0,
@@ -243,10 +245,17 @@ function paintReadout() {
   // school or a year window on, those are two different numbers. Once you start
   // walking the matches the count becomes your position in them, because that is
   // then the more useful of the two numbers.
+  // "N OF M" is the right shape for a text search and the wrong one for a colour
+  // search: the nearest two dozen out of seven thousand is not a proportion
+  // anyone should read as one, because the numerator was chosen and not found.
+  // So the colour question states what it is — the nearest, this many of them
+  // still in view — and only the walking position is said the same way in both,
+  // since there it means the same thing.
   put(el.searchCount, "matched",
-    !state.query ? ""
+    !asking() ? ""
       : state.matchAt >= 0 ? `${state.matchAt + 1}/${num(state.matchTotal)} ↵`
-        : `${num(s.matched)} OF ${num(s.works)} ↵`);
+        : state.near >= 0 ? `${num(s.matched)} NEAREST ↵`
+          : `${num(s.matched)} OF ${num(s.works)} ↵`);
 
   if (state.mode !== "time") return;
   const year = Math.round(state.cursor);
@@ -466,6 +475,10 @@ function writeURL() {
   set("plane", state.chrono ? null : "1");
   set("q", state.query ? state.query : null);
   set("w", state.selected >= 0 ? particleName(state.selected) : null);
+  // Named the same way `w` is, and for the same reason: the question is a
+  // colour of a particular painting, and a bare index would point at a different
+  // one the next time the dataset is rebuilt.
+  set("near", state.near >= 0 ? particleName(state.near) : null);
   const qs = q.toString();
   const next = `${location.pathname}${qs ? `?${qs}` : ""}${location.hash}`;
   if (next === `${location.pathname}${location.search}${location.hash}`) return;
@@ -508,6 +521,15 @@ function applyURL() {
     // link asked for this painting. The ring is drawn only where there is
     // something to ring, which nebula already checks.
     if (particle >= 0) showDetail(particle);
+  }
+
+  // Last, because it is the one thing here that overrides another: a colour
+  // question and a text question cannot both stand, and a link that carries one
+  // meant the one it names.
+  const near = q.get("near");
+  if (near) {
+    const particle = particleNamed(near);
+    if (particle >= 0) setNear(particle);
   }
 }
 
@@ -584,6 +606,9 @@ function setSchools(nat) {
    particles is not something you can total by eye. */
 function setQuery(query) {
   state.query = query;
+  // Both questions fill the same array, so only one can be standing. Typing puts
+  // the colour question away rather than fighting it for the field.
+  if (state.near >= 0) { state.near = -1; state.nearInfo = null; paintNear(); }
   state.field.setSearch(query);
   /* The box is only written when it does not already say this, *ignoring* the
      spaces at its ends — because the query is trimmed and every space is a
@@ -596,6 +621,55 @@ function setQuery(query) {
   state.dirty = true;   // alpha and radius change; nothing moves
   syncURL();
 }
+
+/* The second way of asking, from the panel a particle opened.
+   Text reaches a painting you can already name; this reaches the ones you
+   cannot, by the only property the field actually measures. It deliberately
+   builds no second machinery: it fills the same match array the search fills, so
+   the answer arrives as the same rings on the field, the same named list beside
+   it, and the same walk with Enter. What changes is the question, not the
+   instrument.
+   The work stays selected and stays open. Its own ring is the accent one, and
+   the neighbours' are the thin marks — so the reference and the answers are
+   told apart on the field without a third kind of mark being invented. */
+function setNear(particle) {
+  if (state.query) setQuery("");   // one question at a time
+  const found = state.field.setNear(particle);
+  state.near = particle;
+  state.nearInfo = { hex: state.field.css[particle], worst: found.worst };
+  state.matchAt = -1;
+  state.matchTotal = found.works;
+  state.dirty = true;
+  paintNear();
+  syncURL();
+}
+
+/** Put the colour question away, and hand the field back to whatever text
+ *  question was standing before it — usually none. */
+function clearNear() {
+  state.near = -1;
+  state.nearInfo = null;
+  state.field.setSearch(state.query);
+  state.matchAt = -1;
+  state.matchTotal = 0;
+  state.dirty = true;
+  paintNear();
+  syncURL();
+}
+
+/* The button latches, because the thing it starts is a state of the field and
+   not an action. It is pressed only while the panel is showing the very colour
+   the question was asked about: stepping through the answers moves the panel
+   onto the neighbours, and there the same button offers to ask again from
+   there — which is a different question and must not look like the one already
+   running. */
+function paintNear() {
+  el.btnNear.setAttribute("aria-pressed",
+    String(state.near >= 0 && state.near === state.selected));
+}
+
+/** Is anything being asked of the field at all — by name, or by colour. */
+const asking = () => Boolean(state.query) || state.near >= 0;
 
 /* Which paintings answered, said in words.
    The field can show where the matches are — every one of them is ringed — but a
@@ -611,7 +685,13 @@ function paintMatchList() {
   state.preview = -1;   // the rows are about to be replaced; the index would be stale
   state.matchTotal = list.length;
   if (state.matchAt >= list.length) state.matchAt = -1;
-  if (!state.query || !list.length) {
+  /* A colour question keeps its header even when nothing answered, because the
+     header is the only thing that states it and the only place it can be put
+     away from. Narrow to a small school and then ask about a colour and this is
+     where you land: the two dozen nearest works are real, and none of them are
+     in view. A typed question needs no such care — the words are still in the
+     box, and the count beside it already says none. */
+  if (!asking() || (!list.length && !state.nearInfo)) {
     el.searchList.hidden = true;
     el.searchList.innerHTML = "";
     state.matchIds = [];
@@ -620,7 +700,23 @@ function paintMatchList() {
   const shown = list.slice(0, MATCH_ROWS);
   state.matchIds = list;
   const F = state.field;
-  el.searchList.innerHTML = shown.map((i, k) => {
+  /* A colour question has to say what it asked. A list of names under a text
+     search explains itself — the words are in the box above it — but under a
+     colour search the box is empty and the rows would be a set of paintings with
+     no stated reason for being together. So the colour is shown, as a swatch and
+     as its hex, with the distance the answer had to reach: the last of these
+     works is that far from the one clicked, which is the one number that says
+     whether "like this" is a strong claim here or a weak one.
+     It carries its own dismissal too. A text question is put away in the box
+     that holds it; a colour question has no box, and binding it to the panel it
+     was asked from would end it every time you clicked past a particle —
+     including on the way to reading one of its own answers. */
+  const head = state.nearInfo
+    ? `<li class="findlist__head"><i style="background:${state.nearInfo.hex}"></i>`
+      + `LIKE ${state.nearInfo.hex.toUpperCase()} · WITHIN ΔE ${state.nearInfo.worst.toFixed(1)}`
+      + `<button class="findlist__x" aria-label="Stop searching by colour">×</button></li>`
+    : "";
+  el.searchList.innerHTML = head + shown.map((i, k) => {
     const p = state.data.paintings[F.owner[i]];
     return `<li data-k="${k}" class="${k === state.matchAt ? "is-at" : ""}">`
       + `<b>${span(p.s, p.e)}</b><span>${escapeHtml(p.t || "Untitled")}`
@@ -628,7 +724,11 @@ function paintMatchList() {
   }).join("")
     + (list.length > shown.length
       ? `<li class="findlist__more">${num(list.length - shown.length)} MORE — NARROW THE SEARCH</li>`
-      : "");
+      : "")
+    // Said rather than left as an empty box: the works exist, the filter on the
+    // field is what is hiding them, and that is the actionable half of it.
+    + (list.length ? ""
+      : `<li class="findlist__more">NONE OF THEM ARE IN VIEW</li>`);
   el.searchList.hidden = false;
 }
 
@@ -650,8 +750,13 @@ function stepMatch(dir) {
   markMatchRow();
 }
 
+/* The result rows, and only those. The list also carries a header naming a
+   colour question and a footer counting what was cut off, and neither is a
+   result: walking `children` put the highlight on the footer as soon as the
+   position passed the last shown row, and off by one the moment a header
+   appeared above them. `data-k` is the position, so it is what is asked for. */
 function markMatchRow() {
-  const rows = el.searchList.children;
+  const rows = el.searchList.querySelectorAll("li[data-k]");
   for (let k = 0; k < rows.length; k++) rows[k].classList.toggle("is-at", k === state.matchAt);
   rows[state.matchAt]?.scrollIntoView({ block: "nearest" });
 }
@@ -866,6 +971,7 @@ function bindInput() {
     state.dirty = true;
   });
   el.searchList.addEventListener("click", (event) => {
+    if (event.target.closest(".findlist__x")) { clearNear(); return; }
     const row = event.target.closest("li[data-k]");
     if (!row) return;
     state.matchAt = +row.dataset.k;
@@ -882,6 +988,14 @@ function bindInput() {
     if (event.key !== "Escape") return;
     event.stopPropagation();   // Escape in the box clears it; it does not close the panel
     setQuery("");
+  });
+  /* Pressing it again puts the question away: the control that started a state
+     should be able to end it. The list header has the other × for when the panel
+     has since moved on to one of the answers, and the button no longer stands
+     over the colour that was asked about. */
+  el.btnNear.addEventListener("click", () => {
+    if (state.selected < 0) return;
+    if (state.near === state.selected) clearNear(); else setNear(state.selected);
   });
   el.btnInfo.addEventListener("click", () => { el.about.hidden = false; });
   el.aboutClose.addEventListener("click", () => { el.about.hidden = true; });
@@ -980,6 +1094,7 @@ function showDetail(particle) {
     + `<code>${h.toUpperCase()}</code></li>`).join("");
   el.detailLink.href = src.url.replace("{}", encodeURIComponent(p.i));
   el.detailLink.textContent = `OPEN AT ${src.short} ↗`;
+  paintNear();
   el.detail.hidden = false;
   syncURL();
 }

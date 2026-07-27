@@ -104,6 +104,10 @@
       <h2 id="detailTitle"></h2>
       <p class="panel__artist" id="detailArtist"></p>
       <ul class="swatches" id="detailSwatches"></ul>
+      <!-- Directly under the swatches, because it acts on the one marked among
+           them: the colour you clicked, asked of the whole collection. -->
+      <button class="panel__near" id="btnNear" aria-pressed="false"
+              title="Rank every other painting by how near its closest measured colour comes to the marked one, in CIE L*a*b*. Press again to stop.">COLOURS LIKE THIS ONE</button>
       <dl class="panel__rows">
         <div><dt>DATED</dt><dd id="detailYear"></dd></div>
         <div><dt>SCHOOL</dt><dd id="detailNat"></dd></div>
@@ -169,6 +173,27 @@
       paintings. The strip along the bottom shows works per year, so the thin
       stretches stay visible instead of being flattened. This is a survey of what
       four museums happen to hold and have released, not of art history.</p>
+
+    <h3>FINDING SOMETHING IN IT</h3>
+    <p>Two questions can be put to the field, and both answer the same way: the
+      works that answer keep a thin ring on the field and are named in a list
+      beside it, in date order, and Enter walks them one at a time. Nothing is
+      removed — everything else only dims — so an answer is always read against
+      the collection it came out of rather than against black.</p>
+    <p><b>By name.</b> Type a title or an artist. All the words have to match, so
+      a second one narrows; case and accents are folded, because four catalogues
+      do not spell diacritics the same way and nobody types them anyway.</p>
+    <p><b>By colour.</b> Open a painting by clicking one of its particles and ask
+      for colours like that one. Every other painting is ranked by how near its
+      closest measured colour comes to the one you clicked — straight-line
+      distance in CIE L*a*b*, lightness included — and the nearest two dozen come
+      back. This is the question this dataset answers better than any other, and
+      no amount of typing could reach it: it finds works that have a colour in
+      common with each other and nothing else, across schools and across
+      centuries. The list states the colour it was given and how far the last of
+      the works it returned actually sits from it, in ΔE, since a small number
+      there means the collection is full of that colour and a large one means it
+      barely holds it at all.</p>
 
     <h3>THE EDGE AT 1910</h3>
     <p>The field stops around 1910, and it stops rather than looping. That is a
