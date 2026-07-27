@@ -85,6 +85,12 @@ export const ORDER_BAND = 5;
    collection spans 14.5 to 25.6, so 10–30 shows the shape without the curve
    rescaling itself under a filter and making two schools look alike. */
 export const CHROMA_AXIS = [10, 30];
+/* What a work that does not match the search is worth. Not zero: removing the
+   others would answer "show me Caravaggio" with a handful of dots in a void, and
+   the question is where he sits inside the collection's colour. At 0.22 the rest
+   of the field is still there, still the same shape, and no longer competing —
+   and still above the 0.12 the picker needs, so a dimmed painting can be clicked. */
+const SEARCH_DIM = 0.22;
 const SPREAD_GAIN = 0.85;  // how much a cell's blob grows with its share
 const SPREAD_CAP = 2.1;    // no blob ever reaches further than this, in cells
 const EASE = 0.075;        // per-frame approach to the target position: fluid, not snapped
@@ -95,7 +101,7 @@ const RANK_MASS = [1, 0.86, 0.74, 0.64, 0.56]; // k-means clusters come largest-
 export class Field {
   /** @param {object} data the built chromatica.json */
   constructor(data) {
-    const paintings = data.paintings;
+    const paintings = this.paintings = data.paintings;
     let n = 0;
     for (const p of paintings) n += p.k.length;
 
@@ -228,7 +234,7 @@ export class Field {
     this.tview = { sx: 1, sy: 1, ox: 0, oy: 0, maxL: 100 };
     this.chrono = true;   // the reading the field opens on
     this.placed = false;
-    this.stats = { works: 0, colours: 0, from: y0, to: y1, sigma: 0 };
+    this.stats = { works: 0, colours: 0, from: y0, to: y1, sigma: 0, matched: 0 };
     // Counting distinct works per frame without allocating a Set each frame:
     // a stamp per painting, compared against the frame's own stamp.
     this.seenStamp = 0;
@@ -348,6 +354,39 @@ export class Field {
   }
 
   /**
+   * Narrow by title or artist — by dimming, never by removing.
+   *
+   * 7,094 works and no way to reach one by name: you found a painting by moving
+   * the pointer around until you hit it. But a search that hid everything else
+   * would answer "where is Caravaggio in here" with a handful of dots in a void,
+   * and the whereabouts is the question. The field keeps its shape and its
+   * density — a dimmed particle contributes to crowding exactly as before, so
+   * nothing moves when you type — and only loses opacity and size.
+   *
+   * All terms must match, so "vermeer delft" narrows rather than widens. Case and
+   * accents are folded: nobody types Bruegel with the diaeresis, and the
+   * catalogue is inconsistent about it anyway.
+   *
+   * @returns {number} works matched, or 0 when the query is empty
+   */
+  setSearch(query) {
+    const terms = fold(query).split(/\s+/).filter(Boolean);
+    this.searching = terms.length > 0;
+    // Folded haystack built once, on the first search rather than at boot: most
+    // visits never type anything, and this is 7,094 string allocations.
+    this.hay ??= this.paintings.map((p) => fold(`${p.t || ""} ${p.a || ""}`));
+    this.matchOf ??= new Float32Array(this.hay.length);
+    let matched = 0;
+    for (let pi = 0; pi < this.hay.length; pi++) {
+      const hit = !this.searching || terms.every((term) => this.hay[pi].includes(term));
+      this.matchOf[pi] = hit ? 1 : SEARCH_DIM;
+      if (hit) matched++;
+    }
+    this._wKey = "";   // the weights depend on this now, so they have to be redone
+    return this.searching ? matched : 0;
+  }
+
+  /**
    * Window width, in years, at a given point on the scrubber.
    *
    * A fixed window would be dishonest in both directions: coverage swings about
@@ -404,7 +443,8 @@ export class Field {
       this._wKey = wKey;
       density.fill(0);
       const stamp = ++this.seenStamp;
-      let total = 0, works = 0;
+      const searching = this.searching, matchOf = this.matchOf;
+      let total = 0, works = 0, matched = 0;
       for (let i = 0; i < n; i++) {
         const school = this.natOf[i];
         if (nat >= 0 && school !== nat && school !== nat2) { this.w[i] = 0; continue; }
@@ -412,21 +452,29 @@ export class Field {
         if (timed) {
           const d = this.year[i] - year;
           wt = Math.exp(-d * d * inv);
+          // Tested before the search dims it: a work you are not looking for
+          // should fade, not fall out of the window it belongs to.
           if (wt < MIN_WEIGHT) { this.w[i] = 0; continue; }
         }
-        this.w[i] = wt;
+        const o = this.owner[i];
+        this.w[i] = searching ? wt * matchOf[o] : wt;
+        // Crowding is counted on the undimmed weight, so typing changes what the
+        // field looks like without changing where anything is.
         const m = wt * this.mass[i];
         density[cell[i]] += m;
         total += m;
-        const o = this.owner[i];
-        if (this.seenAt[o] !== stamp) { this.seenAt[o] = stamp; works++; }
+        if (this.seenAt[o] !== stamp) {
+          this.seenAt[o] = stamp;
+          works++;
+          if (searching && matchOf[o] === 1) matched++;
+        }
       }
 
       let occupied = 0;
       for (let c = 0; c < density.length; c++) if (density[c] > 0) occupied++;
-      this._weights = { total, works, occupied };
+      this._weights = { total, works, occupied, matched };
     }
-    const { total, works, occupied } = this._weights;
+    const { total, works, occupied, matched } = this._weights;
 
     // Share of the period's measured colour, per cell of the plane — and then
     // relative to an even spread over the cells this period actually reaches. So
@@ -482,7 +530,7 @@ export class Field {
      * moves about 0.03 px per frame. Redrawing that 60 times a second repaints
      * 11,728 particles to change nothing an eye can see. */
     this.motion = Math.sqrt(moved);
-    this.stats = { works, colours, from, to, sigma };
+    this.stats = { works, colours, from, to, sigma, matched };
   }
 
   /** Nearest drawn particle to a point, or -1. Called on click only. */
@@ -501,6 +549,10 @@ export class Field {
     return best;
   }
 }
+
+/** Case and accents folded away: nobody types Brueghel the same way twice, and the
+    four catalogues do not agree with each other about diacritics either. */
+const fold = (s) => s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
 
 const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
 const clampInt = (v, max) => (v < 0 ? 0 : v > max ? max : v);

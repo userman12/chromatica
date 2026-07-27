@@ -387,13 +387,27 @@ against another over the same centuries, and one filter could only ever answer
 half of it. Each school gets its own chroma curve in the strip, the first solid
 and the second dashed, both in the same near-white and against the same fixed
 axis so they are directly comparable. The Dutch sit at 14.3 in 1650 against the
-Italians' 15.1, and the strip says so without either curve rescaling itself. Keyboard, in the timelapse: arrows ±1 year,
+Italians' 15.1, and the strip says so without either curve rescaling itself.
+
+**Search dims rather than filters.** Typing a title or an artist into FIND fades
+everything that does not answer to 22% instead of removing it, so the matches are
+read against the collection they came out of — where in the six centuries they
+sit, and how small a part of the field they are — rather than against black. The
+field does not move while you type: density is accumulated on the undimmed
+weight, so only alpha and radius change and the cloud you were looking at is
+still the cloud you are looking at. Terms are matched accent-folded and in any
+order, so `cezanne` finds Cézanne's 60 works and `virgin child` finds 91
+regardless of how the title is phrased; dimmed particles stay clickable. The
+count beside the box reads matches against works *shown*, not against the whole
+dataset, because with a school or a year window on those are two different
+numbers. Keyboard, in the timelapse: arrows ±1 year,
 Shift ±10, PageUp/Down ±50, Home/End, space plays and pauses; Escape closes a
 panel.
 
 **The view is in the URL**, so a reading of the field can be handed to someone:
 `?y=1600` opens the timelapse at a year, paused, `?plane=1` on the chromatic
-plane, `?nat=3` narrowed to one school, and `?w=met.437240.2` with a particular
+plane, `?nat=3` narrowed to one school and `?nat2=5` against a second,
+`?q=rembrandt` with a search standing, and `?w=met.437240.2` with a particular
 painting open — collection, catalogue number, and which cluster of its palette
 was clicked, rather than a particle index that the next rebuild of the dataset
 would invalidate. Written with `replaceState`, never `pushState`: the back button

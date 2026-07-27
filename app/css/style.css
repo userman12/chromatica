@@ -160,6 +160,16 @@ body { display: flex; flex-direction: column; }
 
 .filter { display: flex; align-items: center; gap: 7px; margin-left: auto; }
 .filter--vs { margin-left: 0; }
+.filter--find { margin-left: auto; }
+#search {
+  appearance: none; background: #111; color: var(--text-bright);
+  border: 1px solid var(--line); border-radius: 0;
+  font-family: var(--mono); font-size: 10px; letter-spacing: .08em;
+  padding: 4px 8px; width: 138px;
+}
+#search::placeholder { color: #4a504c; letter-spacing: .12em; }
+#search:focus-visible { outline: 1px solid var(--accent); outline-offset: 1px; }
+.filter__count { font-size: 8px; letter-spacing: .14em; color: var(--accent); min-width: 74px; white-space: nowrap; }
 .filter__label { font-size: 8px; letter-spacing: .16em; color: #4a504c; }
 /* Which select owns which chroma line in the strip. The two curves are the same
    near-white — a second colour in there would compete with the histogram — so

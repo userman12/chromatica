@@ -62,7 +62,14 @@
       </span>
     </div>
 
-    <div class="filter">
+    <div class="filter filter--find">
+      <label class="filter__label" for="search">FIND</label>
+      <input id="search" type="search" autocomplete="off" spellcheck="false"
+             placeholder="TITLE OR ARTIST" aria-describedby="searchCount">
+      <span class="filter__count" id="searchCount" role="status"></span>
+    </div>
+
+    <div class="filter filter--vs">
       <label class="filter__label" for="natFilter">SCHOOL <i class="key key--a"></i></label>
       <select id="natFilter"><option value="-1">ALL</option></select>
     </div>

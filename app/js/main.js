@@ -45,6 +45,7 @@ const el = {
   cursorLabel: $("cursorLabel"), cursorValue: $("cursorValue"),
   cursorRange: $("cursorRange"), cursorSpan: $("cursorSpan"),
   natFilter: $("natFilter"), natFilter2: $("natFilter2"),
+  search: $("search"), searchCount: $("searchCount"),
   btnTimelapse: $("btnTimelapse"), btnPlay: $("btnPlay"),
   btnReset: $("btnReset"), btnInfo: $("btnInfo"),
   timeline: $("timelineCanvas"), timelineLabel: $("timelineLabel"),
@@ -69,6 +70,7 @@ const state = {
   cursor: 0,          // the timelapse year, kept as a float so play is smooth
   nat: -1,            // school filter, -1 for all
   nat2: -1,           // a second school shown beside the first, -1 for none
+  query: "",          // free text over title and artist; dims, never removes
   selected: -1,       // particle index
   hover: -1,
   cssW: 0, cssH: 0,
@@ -166,6 +168,9 @@ function paintReadout() {
   put(el.statSpan, "span", shown);
   put(el.statWindow, "window",
     state.mode === "time" ? `±${Math.round(s.sigma)} YR` : "ALL");
+  // Matches among the works actually on screen, not in the whole dataset: with a
+  // school or a year window on, those are two different numbers.
+  put(el.searchCount, "matched", state.query ? `${num(s.matched)} OF ${num(s.works)}` : "");
 
   if (state.mode !== "time") return;
   const year = Math.round(state.cursor);
@@ -341,6 +346,7 @@ function writeURL() {
   set("nat", state.nat >= 0 ? String(state.nat) : null);
   set("nat2", state.nat2 >= 0 ? String(state.nat2) : null);
   set("plane", state.chrono ? null : "1");
+  set("q", state.query ? state.query : null);
   set("w", state.selected >= 0 ? particleName(state.selected) : null);
   const qs = q.toString();
   const next = `${location.pathname}${qs ? `?${qs}` : ""}${location.hash}`;
@@ -366,6 +372,11 @@ function applyURL() {
   if (nat >= 0) setSchools(nat, school("nat2"));
 
   if (q.get("plane") === "1") setLayout(false);
+
+  // A query that matches nothing is still honoured: an empty answer is an
+  // answer, and silently dropping it would look like the search had not run.
+  const query = q.get("q");
+  if (query) setQuery(query.slice(0, 80));
 
   // ?y=1600 opens straight into the timelapse at a year, paused: a moment in the
   // field is worth being able to hand to someone.
@@ -442,6 +453,21 @@ function setSchools(nat, nat2) {
   state.tlKey = "";
   state.dirty = true;   // particles leave the field without moving
   paintTimelineLabel();
+  syncURL();
+}
+
+/* Search dims rather than filters, and that is the whole point of it. A word
+   typed here does not remove anything from the field: every particle stays where
+   it stood, and the ones that do not match simply fall back. So you read the
+   answer against the collection it came out of — where in the six centuries the
+   matches sit, and how much of the field they are — instead of against black.
+   The count says how many works answered, because a scattering of faint
+   particles is not something you can total by eye. */
+function setQuery(query) {
+  state.query = query;
+  state.field.setSearch(query);
+  if (el.search.value !== query) el.search.value = query;
+  state.dirty = true;   // alpha and radius change; nothing moves
   syncURL();
 }
 
@@ -557,6 +583,7 @@ function bindInput() {
   el.btnLayout.addEventListener("click", () => setLayout(!state.chrono));
   el.btnReset.addEventListener("click", () => {
     setSchools(-1, -1);
+    setQuery("");
     hideDetail();
     setLayout(true);
     setMode("all");
@@ -569,6 +596,14 @@ function bindInput() {
     setSchools(state.nat, Number(el.natFilter2.value));
     hideDetail();
   });
+  // "search" inputs fire input on the browser's own clear button too, so one
+  // listener covers typing, pasting and the ×.
+  el.search.addEventListener("input", () => setQuery(el.search.value.trim()));
+  el.search.addEventListener("keydown", (event) => {
+    if (event.key !== "Escape") return;
+    event.stopPropagation();   // Escape in the box clears it; it does not close the panel
+    setQuery("");
+  });
   el.btnInfo.addEventListener("click", () => { el.about.hidden = false; });
   el.aboutClose.addEventListener("click", () => { el.about.hidden = true; });
   el.detailClose.addEventListener("click", hideDetail);
@@ -576,6 +611,7 @@ function bindInput() {
   /* --- keyboard --- */
   window.addEventListener("keydown", (event) => {
     if (event.key === "Escape") { hideDetail(); el.about.hidden = true; return; }
+    if (event.target === el.search) return;   // space and arrows belong to the box
     if (event.key === " " && state.mode === "time") {
       event.preventDefault(); setPlaying(!state.playing); return;
     }
