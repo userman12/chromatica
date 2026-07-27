@@ -89,10 +89,29 @@ collapse into `Other / unattributed`.
    reproduction measured 13.6. These paintings are **dropped entirely** (7.3%
    rejected in production, matching the estimate).
 2. **Studio backdrops** — small panels and shaped altarpieces are photographed
-   against uniform light-neutral seamless, which injected grey cells that belong
-   to a photographer, not a painter. Detected via a border ring that is
-   near-neutral *and* light *and* mostly uniform; deliberately calibrated so it
-   will **not** strip a painting's own dark ground, which is real content.
+   against uniform seamless, which injects cells that belong to a photographer,
+   not a painter. Detected via a border ring that is near-neutral and mostly
+   uniform. The hard part is the dark case, and the first version of this got it
+   wrong: it rejected every dark ring as "the painting's own ground", which is
+   true of Zurbarán and false of a gothic gable shot on black. That cost 607
+   works a fake near-black cluster — 100% of them carried one, against a 66% base
+   rate, and because shaped supports are medieval the damage ran 24.7% of
+   14th-century works against 6.1% of 19th-century ones, flattening the very
+   chroma decline this project is about.
+
+   What separates the two is flatness, not darkness. Studio and letterbox black
+   is near-perfectly flat (median ring deviation **2.8** of 255, and 494 of 610
+   rings sit at literally `(0,0,0)`); painted darkness carries brushwork,
+   craquelure and varnish and measures **9–15**. The gap between 5 and 8 is
+   empty, so that is where the threshold sits. Two further tests were needed
+   because flatness alone still caught the tenebrists: neutrality judged against
+   how dark the ring is (8 points of spread is 6% of a light seamless and 40% of
+   a near-black edge — a warm brown `(25,18,17)` was reading as neutral), and
+   removal by **border-connected region rather than by colour**, since a surround
+   is not a colour but the part of that colour continuous with the edge — which
+   is what lets a sitter's black coat survive while the black around a gable does
+   not. Validated over all 7,094: 605 corrected, **0 of 481** painted dark
+   grounds touched, and the light path strictly unchanged or gentler.
 3. **Ivory portrait miniatures** — 719 works whose palettes are dominated by the
    ivory support and flesh tones, concentrated in 1790–1840. Excluded by medium.
 
@@ -221,8 +240,8 @@ to disk.
 | --- | --- |
 | 01 select | **7,499 candidates** · met 2,840 · nga 2,689 · aic 1,179 · cma 791, after cross-source dedup |
 | 02 image URLs | 2,840 resolved from the Met API · the other three carry their URL from selection |
-| 03 palettes | **7,105 usable** · 377 dropped as greyscale · 22 failed to fetch |
-| 04 build | 7,094 paintings · 32,438 measured colours · 1309–1910 · 1.2 MB |
+| 03 palettes | **7,105 usable** · 377 dropped as greyscale · 25 empty · 8 failed to fetch |
+| 04 build | 7,094 paintings · 32,387 measured colours · 1309–1910 · 1.2 MB |
 | 05 thumbs | 7,094 rendered · 0 failed · 596–640 px long edge · 247 MB committed |
 
 Per source in the published field: the Met 2,544, the National Gallery 2,689,
@@ -242,7 +261,7 @@ than by the painter.
 `app/` is plain static files — no bundler, no build step, no dependencies. The
 GitHub Actions workflow uploads the directory as-is.
 
-The 32,438 colours are **particles in a field**, one per (painting, cluster).
+The 32,387 colours are **particles in a field**, one per (painting, cluster).
 There is no grid, no row, no cell and no border inside the field: only colour
 against black. Every control lives in the two HUD bars, never on the surface.
 
@@ -275,7 +294,7 @@ rank within its own painting.
 ### Time is a weight, not a position
 
 **The default state is the whole collection at once** — all 7,094 paintings, all
-32,438 colours, 1309 to 1910, every painting weighted the same. That is the
+32,387 colours, 1309 to 1910, every painting weighted the same. That is the
 picture, and it is complete without touching anything.
 
 **The timelapse is a mode you switch on.** It replaces the flat weight with a
@@ -362,7 +381,7 @@ Three things had to be fixed to get there, and two of them were not the particle
   apart by at most 1.2 × 10⁻⁴ px — Float32 rounding in the identity, three orders
   of magnitude under the redraw threshold.
 
-Colour is the one thing not optimised. 29,984 of the 32,438 particles are a
+Colour is the one thing not optimised. 30,203 of the 32,387 particles are a
 distinct hex, so `fillStyle` is re-parsed for nearly every particle. Quantising the palette would collapse that to a few hundred parses, and
 would also mean the colours on screen are no longer the colours that were measured.
 It stays.
@@ -468,15 +487,28 @@ frame was on screen — and anything else already in the query string survives, 
 ### What the field actually shows
 
 Worth recording because it contradicts the obvious story, and worth re-measuring
-after the collection nearly tripled: it survived. Weighted the same way the app
-weights them, the **late Middle Ages are still the most chromatic period here** —
-mean chroma 25.4 around 1340, which is gold ground, vermilion and ultramarine,
-not mud. Saturation then falls for three centuries without interruption. The
-darkest and least saturated stretch is the **later Baroque, ~1660–1680** (mean
-L\* 32.4, mean chroma 14.8): tenebrism, not archaism. Only after 1700 does either
-curve turn back up, and neither recovers its 14th-century value before the field
-ends — 1910 is the brightest point in the whole survey (mean L\* 43.5) at a
-chroma of 16.9, two thirds of the 1340 figure.
+after the collection nearly tripled: it survived. The figures below are the chroma
+curve's own extremes — the marks the strip draws and labels, so anything quoted
+here can be checked by hovering them in the app rather than taken on trust.
+
+The **late Middle Ages are the most chromatic period here** — chroma **26.6**
+around 1339, which is gold ground, vermilion and ultramarine, not mud. Saturation
+then falls for three centuries without interruption to a minimum of **14.6**
+around 1673, **55% of the medieval peak**: tenebrism, not archaism. Only after
+1700 does the curve turn back up, and it does not recover its 14th-century value
+before the field ends — 1910 stands at **16.9**, a little under two thirds of the
+1339 figure.
+
+Two corrections to what this section said before. The numbers have moved, because
+the studio-backdrop fix above removed 360 fake near-black particles concentrated
+in exactly the centuries this claim is about: the medieval peak rose a full point
+and the trough deepened from 57% to 55% of it, so the artefact had been flattening
+the argument from both ends. And the survey's **brightest** point is no longer
+1910 — with the black stripped off the gold-ground panels, 1384 now reads brighter
+(mean L\* 45.3 against 44.8). The earlier figures in this paragraph were also not
+reproducible from the committed dataset by any weighting tried, so they are best
+read as having gone stale across an earlier rebuild; these are stated with their
+method attached so the same cannot happen quietly again.
 
 Three more collections moved the trough about half a century later and shaved
 0.5 off the medieval peak; the shape did not change. The visualisation was not

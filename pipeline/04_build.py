@@ -162,6 +162,10 @@ def main():
                             "traditions; works held by more than one of these "
                             "collections are counted once",
                 "palette": "k-means k=5 in CIE L*a*b*, clusters <4% dropped, near-duplicates merged",
+                "backdrop": "the photographer's surround is removed where the "
+                            "border is one flat neutral colour, light or dark, "
+                            "and only the part of it continuous with the edge; "
+                            "a painting's own dark ground is kept",
                 "movement": "none of these catalogues exposes a clean "
                             "artistic-movement field; artist nationality is "
                             "used as a proxy",

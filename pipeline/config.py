@@ -167,15 +167,54 @@ GRAYSCALE_MAX_CHROMA = 4.0
 
 # Detection keys on what a seamless studio backdrop actually is -- near-neutral
 # (R~=G~=B) and light -- rather than on strict uniformity, because the backdrop
-# is usually vignetted. This deliberately will NOT strip a painting's own dark
-# background (fails the lightness test), which is real content.
+# is usually vignetted.
 BACKDROP_RING = 0.03                    # fraction of the edge sampled as "ring"
 BACKDROP_UNIFORM_DIST = 45              # ring pixel counts as "same" within this
 BACKDROP_UNIFORM_FRAC = 0.55            # ring is a backdrop above this fraction
 BACKDROP_MAX_CHROMA = 12                # max(RGB)-min(RGB) to count as neutral
-BACKDROP_MIN_LIGHTNESS = 140            # mean RGB floor; darks are real paint
+BACKDROP_MIN_LIGHTNESS = 140            # mean RGB floor for a *light* backdrop
 BACKDROP_TOLERANCE = 45                 # remove pixels within this of backdrop
 BACKDROP_MAX_REMOVED = 0.75             # abort removal if it would eat this much
+
+# Shaped supports -- gothic gables, tondi, arched altarpieces -- and letterboxed
+# museum derivatives are shot on black just as often as on grey seamless, and a
+# lightness floor alone cannot see it. Rejecting every dark ring as "the
+# painting's own ground" put pure #000000 into 607 palettes, 100% of them, in a
+# collection where the base rate for a near-black cluster is 66%. A luminous
+# daylight harbour scene (met/14265) was assigned exact black as one colour in
+# five. The bias is not uniform in time either: it reaches 24.7% of 14th-century
+# works against 6.1% of 19th-century ones, because shaped panels are medieval,
+# so it drags the early centuries down the lightness axis and flattens the very
+# chroma decline the piece is about (measured: +1.52 chroma in the 1300s once
+# removed, +0.14 in the 1900s).
+#
+# What separates the two is flatness, not darkness. Studio black and letterbox
+# black are near-perfectly flat -- median ring deviation 2.8 of 255. Painted
+# darkness never is: brushwork, craquelure and varnish put it at 9-15 (measured
+# on Sargent's dark interiors and Spanish Baroque grounds). The gap between 5
+# and 8 is empty, so the threshold sits in it and neither side is close to it.
+BACKDROP_DARK_MAX_LIGHTNESS = 22        # a ring this dark may be a surround...
+BACKDROP_DARK_MAX_STD = 5.0             # ...only if flatter than paint can be
+# Neutrality has to be judged against how dark the ring is, not on one absolute
+# span: 8 points of spread is 6% of a light grey seamless and 40% of a near-black
+# edge. Left at the light rule, a dark warm brown -- (25,18,17), which is paint
+# -- read as neutral, and a Romantic portrait dark at all four edges (met/11205)
+# was taken for a surround with 70% of the canvas inside the tolerance. Of the
+# rings this branch admits, 494 of 610 sit at exactly (0,0,0): letterboxing and
+# seamless black are mathematically neutral, and asking for that is what tells
+# them from a painting that merely happens to be dark at the edge.
+BACKDROP_DARK_MAX_CHROMA = 6
+# Much tighter than the light one. A dark surround is one exact colour by the
+# time it gets here -- flat and neutral, 494 of 610 at literally (0,0,0) -- so a
+# wide tolerance buys nothing and costs a great deal: a painting dark at the edge
+# has its own deepest passages a short reach away, and the removal walks straight
+# out of the surround and into them. Measured across the tolerance range, the
+# genuine surrounds do not move at all (70.3% -> 70.9% of the frame over 10..26,
+# because there is nothing between the backdrop and the artwork), while a panel
+# portrait inset on black went 31% -> 57%. That divergence is the tell, and 14
+# sits below where it opens: roughly 1.6x the ring's own deviation, enough for a
+# vignetted or noisy surround and not enough to reach paint.
+BACKDROP_DARK_TOLERANCE = 14
 
 # --- adaptive binning ----------------------------------------------------
 # Coverage is wildly uneven (4 paintings in the 1350s vs 245 in the 1870s), so

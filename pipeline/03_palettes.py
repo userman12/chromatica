@@ -25,6 +25,7 @@ from pathlib import Path
 
 import numpy as np
 from PIL import Image, ImageOps
+from scipy import ndimage
 from sklearn.cluster import KMeans
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -72,11 +73,21 @@ def mean_chroma(arr):
 
 
 def detect_backdrop(arr):
-    """Return the backdrop RGB if the border ring is a uniform studio background.
+    """Return (backdrop RGB, removal tolerance) if the border ring is a studio
+    background, else None.
 
     A tightly-cropped painting has a busy, high-variance border ring and returns
-    None, so nothing is removed. A panel shot on grey seamless has a ring that is
-    ~one colour, which we can then subtract.
+    None, so nothing is removed. A panel shot on grey seamless -- or on black,
+    which is just as common once the support stops being a rectangle -- has a
+    ring that is ~one colour, which we can then subtract.
+
+    Light and dark backdrops are admitted on different evidence, because they are
+    not equally easy to mistake. Nothing in a painting is a flat light neutral
+    reaching the frame on all four sides, so lightness plus uniformity settles
+    it. Plenty of paintings are dark at the edge on all four sides, and their
+    darkness is the work itself -- so a dark ring has to prove it is flatter than
+    paint can be before anything is taken away. See config for the measurements
+    the two thresholds sit between.
     """
     h, w = arr.shape[:2]
     thickness = max(2, int(min(h, w) * C.BACKDROP_RING))
@@ -87,10 +98,50 @@ def detect_backdrop(arr):
     median = np.median(ring, axis=0)
     if median.max() - median.min() > C.BACKDROP_MAX_CHROMA:
         return None                      # coloured -> painted, not a backdrop
-    if median.mean() < C.BACKDROP_MIN_LIGHTNESS:
-        return None                      # dark -> the painting's own ground
     close = np.linalg.norm(ring - median, axis=1) < C.BACKDROP_UNIFORM_DIST
-    return median if close.mean() > C.BACKDROP_UNIFORM_FRAC else None
+    if close.mean() <= C.BACKDROP_UNIFORM_FRAC:
+        return None                      # busy -> the painting reaches the edge
+
+    light = median.mean()
+    if light >= C.BACKDROP_MIN_LIGHTNESS:
+        return median, C.BACKDROP_TOLERANCE
+    # Flatness measured only over the pixels that belong to the ring's own
+    # colour: a dark passage of the painting intruding into the ring is excluded
+    # by `close` and so cannot inflate the figure, and a genuinely painted ground
+    # keeps its brushwork in it and fails.
+    if light <= C.BACKDROP_DARK_MAX_LIGHTNESS \
+            and median.max() - median.min() <= C.BACKDROP_DARK_MAX_CHROMA \
+            and float(ring[close].std()) <= C.BACKDROP_DARK_MAX_STD:
+        return median, C.BACKDROP_DARK_TOLERANCE
+    return None                          # the painting's own ground, real content
+
+
+def backdrop_mask(arr, colour, tolerance):
+    """Keep-mask that removes the backdrop *region*, not the backdrop colour.
+
+    Matching on colour alone removes every pixel of that colour anywhere in the
+    picture. For a light seamless that is nearly harmless. For a dark surround it
+    is not: a small panel portrait inset on black (met/435912) had 64% of itself
+    inside the tolerance, because the sitter's black cap and fur robe are the
+    same black as the photographer's paper, and stripping the surround would have
+    taken his costume with it.
+
+    A surround is not a colour, it is a region -- the part of that colour that
+    reaches the edge of the photograph and is continuous with it. So the mask is
+    built by connected components and only the components touching the border are
+    dropped. The sitter's coat is interior and survives; the black around a
+    shaped gable does not, which is the whole point.
+    """
+    near = np.linalg.norm(arr.astype(np.int16) - colour, axis=2) <= tolerance
+    labels, n = ndimage.label(near)
+    if n == 0:
+        return np.ones(arr.shape[:2], bool)
+    edge = np.concatenate([labels[0], labels[-1], labels[:, 0], labels[:, -1]])
+    touching = np.unique(edge)
+    touching = touching[touching > 0]
+    if touching.size == 0:
+        return np.ones(arr.shape[:2], bool)
+    return ~np.isin(labels, touching)
 
 
 def extract_palette(img):
@@ -102,7 +153,8 @@ def extract_palette(img):
     backdrop = detect_backdrop(arr)
     flat = arr.reshape(-1, 3)
     if backdrop is not None:
-        keep = np.linalg.norm(flat.astype(np.int16) - backdrop, axis=1) > C.BACKDROP_TOLERANCE
+        colour, tolerance = backdrop
+        keep = backdrop_mask(arr, colour, tolerance).reshape(-1)
         # Guard against monochrome or very dark paintings where the "backdrop"
         # colour is actually most of the artwork.
         if keep.sum() > 400 and (1 - keep.mean()) < C.BACKDROP_MAX_REMOVED:
