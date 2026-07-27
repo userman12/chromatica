@@ -144,13 +144,27 @@ body { display: flex; flex-direction: column; }
 /* ---------- bottom controls ---------- */
 .controls { display: flex; align-items: center; gap: 18px; flex-wrap: wrap; }
 
-.cursor { display: flex; align-items: baseline; gap: 8px; }
+/* min-height because the row is baseline-aligned: 21px and 13px numerals sit on
+   the same baseline but hang different amounts below it, which is another one or
+   two pixels of footer that would move the field. */
+.cursor { display: flex; align-items: baseline; gap: 8px; min-height: 26px; }
 .cursor__range { display: flex; align-items: baseline; gap: 6px; margin-left: 6px; }
 .cursor__range b { color: var(--text-bright); font-size: 11px; font-weight: 500; }
 .cursor__label { font-size: 8px; letter-spacing: .16em; color: #4a504c; }
+/* Present in the layout, absent from the picture. The footer sits directly under
+   the field and the field is a canvas: anything that changes the height of this
+   bar changes the size of the canvas above it, and the whole cloud jumps at the
+   moment you press a mode button. `hidden` would have taken the box out of flow
+   and done exactly that. visibility also keeps these out of the tab order and
+   out of the accessibility tree, which is what hidden was there for. */
+.is-vacant { visibility: hidden; }
+
 .cursor__year {
   font-size: 21px; font-weight: 500; color: var(--accent);
   letter-spacing: .06em;
+  /* Fixed, because the two variants below are 21px and 13px and an auto line box
+     would hand the footer two different heights — the same jump again. */
+  line-height: 26px;
   /* tabular figures so the digits never shift horizontally while scrubbing */
   font-variant-numeric: tabular-nums;
   text-shadow: 0 0 14px #00ff9d40;

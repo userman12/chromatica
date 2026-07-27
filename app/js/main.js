@@ -98,8 +98,18 @@ const boot = (line) => {
 /* ---------- view ---------- */
 function measure() {
   const rect = el.stage.getBoundingClientRect();
-  state.cssW = Math.max(1, Math.floor(rect.width));
-  state.cssH = Math.max(1, Math.floor(rect.height));
+  const w = Math.max(1, Math.floor(rect.width));
+  const h = Math.max(1, Math.floor(rect.height));
+  if (w === state.cssW && h === state.cssH) return;   // observed, so called often
+  state.cssW = w;
+  state.cssH = h;
+  // The canvas is sized in whole pixels, so it is also *placed* in whole pixels
+  // rather than left at height:100% of a box that is 484.4 tall. Otherwise CSS
+  // stretches the backing store by the fraction, and a click is read through a
+  // scale the picker knows nothing about. Sub-pixel, but this is the coordinate
+  // system every pick and every hover chip is measured in.
+  el.field.style.width = `${w}px`;
+  el.field.style.height = `${h}px`;
   nebula.resize(state.cssW, state.cssH);
   state.field.resize(state.cssW, state.cssH);
   state.tlW = el.timeline.clientWidth;
@@ -406,8 +416,10 @@ function setMode(mode, { year = null, play = null } = {}) {
   state.dirty = true;
 
   el.btnTimelapse.setAttribute("aria-pressed", String(timed));
-  el.btnPlay.hidden = !timed;
-  el.cursorRange.hidden = !timed;
+  // Not `hidden`: see .is-vacant. These two keep their space in the footer in
+  // both modes, so switching mode cannot resize the field above them.
+  el.btnPlay.classList.toggle("is-vacant", !timed);
+  el.cursorRange.classList.toggle("is-vacant", !timed);
   el.cursorLabel.textContent = timed ? "YEAR" : "SHOWING";
   el.cursorValue.classList.toggle("is-word", !timed);
   if (!timed) el.cursorValue.textContent = "ALL YEARS";
@@ -629,11 +641,14 @@ function bindInput() {
     setCursor(Math.round(state.cursor) + dy);
   });
 
-  let resizeTimer;
-  window.addEventListener("resize", () => {
-    clearTimeout(resizeTimer);
-    resizeTimer = setTimeout(measure, 120);
-  });
+  /* The stage is watched, not the window. A window resize is not the only thing
+     that changes the size of the field: the footer under it grows and shrinks
+     with the mode, and a canvas measured for the old height is stretched by CSS
+     to the new one — the picture moves, the coordinates behind pick() do not,
+     and the ring lands off the pointer. ResizeObserver fires before the paint
+     that would have shown the mismatch, and measure() returns immediately when
+     the box has not actually changed, so calling it often costs nothing. */
+  new ResizeObserver(measure).observe(el.stage);
 }
 
 /* ---------- hover ---------- */
