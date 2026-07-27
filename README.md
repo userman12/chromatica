@@ -298,15 +298,33 @@ cloud rather than a slab. It touches alpha only; no hue is altered.
 
 ### Rendering
 
-**Canvas 2D**, two passes, flat typed arrays, no per-frame allocation. The
-figures below were measured in headless Chrome at 1440×900, dpr 2, on the
-11,728-particle build: `step()` cost 0.57 ms for the whole field and the draw was
-the budget at ~14 ms, for **60 fps in both modes**. The field is now 32,438
-particles — 2.8× denser — and those numbers have not been re-measured on a real
-browser, so treat them as the design target rather than as the current reading.
-The two optimisations below are what create the headroom for the increase.
+**Canvas 2D**, two passes, flat typed arrays, no per-frame allocation. Measured
+at 32,438 particles, dpr 2, on an M-series Mac, driving the real page through the
+timelapse and back:
 
-**Append `?perf=1`** to check that claim rather than inherit it. An overlay
+| | Safari 26 · 2880×1266 | Firefox 140 · 2682×970 |
+|---|---|---|
+| settled, whole span | **58.8 fps**, 14% of frames drew | **60 fps**, 22% of frames drew |
+| timelapse playing, chronology | **58.8 fps**, every frame drew | **30 fps**, every frame drew |
+| timelapse playing, chromatic plane | **58.8 fps**, every frame drew | **30 fps**, every frame drew |
+
+So the 60 fps claim holds in Safari at the full field, and **does not hold in
+Firefox while the field is in motion** — there a full-field draw costs 34–36 ms,
+which is a 30 fps frame on its own. Worse, it is self-sustaining: at 30 fps each
+frame's drift is twice as far, which clears the redraw threshold below, which
+guarantees another full draw. Safari's own figure for that draw is 1–2 ms, but
+that number cannot be read literally — Safari defers canvas work and flushes it
+at the next entry into JS, where it lands on the following frame's `step`. Frame
+interval is the only figure the two engines can be compared on, and it is also
+the only one the viewer feels.
+
+`step()` is the part that is engine-independent, and it is **0.65 ms per frame**
+for the whole field, measured in node against the real dataset — up from 0.57 ms
+on the 11,728-particle build for 2.8× the particles, which is the two
+optimisations below doing their work. A standing search costs nothing: 0.645 ms
+with one, 0.647 ms without.
+
+**Append `?perf=1`** to re-check any of this rather than inherit it. An overlay
 appears carrying frame interval, `step()` and draw cost as p50 and p95 over a
 rolling three seconds, and the share of frames that reached a draw at all — that
 last one is the number that says whether the retained-canvas optimisation below
@@ -324,7 +342,8 @@ Three things had to be fixed to get there, and two of them were not the particle
   Once the whole collection has settled, the only motion left is the idle
   breathing — about 0.03 px per frame. `step()` reports the largest distance any
   particle travelled, and the field is redrawn when the unpainted total passes
-  0.25 px: about 7 times a second instead of 60, for a picture that is identical
+  0.25 px — measured at 14% of frames in Safari and 22% in Firefox on a settled
+  whole span, so most frames cost nothing at all — for a picture that is identical
   to within a quarter of a pixel on particles several pixels wide. The timelapse
   reweights every particle on every frame, so there it always redraws.
 - A global alpha scale, as above, so the eightfold denser default is still a cloud.
