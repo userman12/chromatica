@@ -369,7 +369,18 @@ browser never requests an image from a museum. Hovering names the work and print
 A school filter narrows the field to one tradition's own colour rather than
 averaging it into everyone else's. Keyboard, in the timelapse: arrows ±1 year,
 Shift ±10, PageUp/Down ±50, Home/End, space plays and pauses; Escape closes a
-panel. `?y=1600` deep-links straight into the timelapse at a year, paused.
+panel.
+
+**The view is in the URL**, so a reading of the field can be handed to someone:
+`?y=1600` opens the timelapse at a year, paused, `?plane=1` on the chromatic
+plane, `?nat=3` narrowed to one school, and `?w=met.437240.2` with a particular
+painting open — collection, catalogue number, and which cluster of its palette
+was clicked, rather than a particle index that the next rebuild of the dataset
+would invalidate. Written with `replaceState`, never `pushState`: the back button
+should leave the page, not walk back through every year you scrubbed past.
+Nothing is written mid-timelapse — the URL says where you stopped, not which
+frame was on screen — and anything else already in the query string survives, so
+`?perf=1` holds through a scrub.
 
 ### What the field actually shows
 

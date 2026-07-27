@@ -261,6 +261,111 @@ function drawTimeline() {
   }
 }
 
+/* ---------- the view, in the URL ---------- */
+/* `?y=1600` has always worked, but it was the only thing that did: which layout
+ * you were in, which school you had narrowed to, and which painting you had open
+ * lived only in this tab. "The Dutch, on the chromatic plane, this Vermeer" was
+ * not something anyone could send.
+ *
+ * Four keys, written with replaceState and never pushState — the back button
+ * should leave the page, not walk back through every year you scrubbed past.
+ * Anything else already in the query string is preserved rather than rebuilt, so
+ * ?perf=1 survives a scrub.
+ */
+
+/** Stable name for a particle: collection, catalogue number, which cluster of the
+ *  palette. A bare index would be shorter and would break the next time the
+ *  dataset is rebuilt and every painting shifts by one. */
+function particleName(i) {
+  const F = state.field;
+  const p = state.data.paintings[F.owner[i]];
+  // Palettes are five entries at most, so walking back to the painting's first
+  // particle is cheaper than storing the base index for all 32,438.
+  let k = 0;
+  while (i - k - 1 >= 0 && F.owner[i - k - 1] === F.owner[i]) k++;
+  return `${state.data.meta.sources[p.c].key}.${p.i}.${k}`;
+}
+
+/** The inverse, or -1 if the URL names something this dataset does not have. */
+function particleNamed(name) {
+  const first = name.indexOf("."), last = name.lastIndexOf(".");
+  if (first < 1 || last <= first) return -1;
+  const key = name.slice(0, first);
+  const id = name.slice(first + 1, last);
+  const k = Number(name.slice(last + 1));
+  const c = state.data.meta.sources.findIndex((s) => s.key === key);
+  if (c < 0 || !Number.isInteger(k) || k < 0) return -1;
+  // One pass over 7,094 paintings, and only when the parameter is present.
+  const paintings = state.data.paintings;
+  let base = 0;
+  for (let pi = 0; pi < paintings.length; pi++) {
+    const p = paintings[pi];
+    if (p.c === c && p.i === id) return k < p.k.length ? base + k : -1;
+    base += p.k.length;
+  }
+  return -1;
+}
+
+let urlTimer = 0;
+
+/** Coalesce to at most four writes a second: a drag moves the cursor every frame,
+ *  and Safari rate-limits replaceState. Trailing edge, so the URL always ends up
+ *  describing where you stopped. */
+function syncURL() {
+  if (urlTimer) return;
+  urlTimer = setTimeout(() => { urlTimer = 0; writeURL(); }, 250);
+}
+
+function writeURL() {
+  // Nothing is written mid-timelapse. The URL should say where you stopped, not
+  // which frame of an animation was on screen when the throttle happened to fire.
+  if (state.playing) return;
+  const q = new URLSearchParams(location.search);
+  const set = (k, v) => (v === null ? q.delete(k) : q.set(k, v));
+  set("y", state.mode === "time" ? String(Math.round(state.cursor)) : null);
+  set("nat", state.nat >= 0 ? String(state.nat) : null);
+  set("plane", state.chrono ? null : "1");
+  set("w", state.selected >= 0 ? particleName(state.selected) : null);
+  const qs = q.toString();
+  const next = `${location.pathname}${qs ? `?${qs}` : ""}${location.hash}`;
+  if (next === `${location.pathname}${location.search}${location.hash}`) return;
+  history.replaceState(null, "", next);
+}
+
+/** Read the same four keys at boot. Each is validated against the dataset that
+ *  actually loaded, and an unusable one is dropped rather than approximated. */
+function applyURL() {
+  const q = new URLSearchParams(location.search);
+
+  const nat = Number(q.get("nat"));
+  // Schools under 12 works have no option in the filter, so the select would
+  // silently keep showing ALL while the field narrowed. Only honour what is there.
+  if (q.has("nat") && Number.isInteger(nat)
+      && el.natFilter.querySelector(`option[value="${nat}"]`)) {
+    state.nat = nat;
+    el.natFilter.value = String(nat);
+    state.tlKey = ""; state.dirty = true;
+  }
+
+  if (q.get("plane") === "1") setLayout(false);
+
+  // ?y=1600 opens straight into the timelapse at a year, paused: a moment in the
+  // field is worth being able to hand to someone.
+  const year = Number(q.get("y"));
+  if (Number.isFinite(year) && year >= state.field.y0 && year <= state.field.y1) {
+    setMode("time", { year, play: false });
+  }
+
+  const named = q.get("w");
+  if (named) {
+    const particle = particleNamed(named);
+    // Opened even if the current filter or year window hides its particle: the
+    // link asked for this painting. The ring is drawn only where there is
+    // something to ring, which nebula already checks.
+    if (particle >= 0) showDetail(particle);
+  }
+}
+
 /* ---------- modes ---------- */
 function setMode(mode, { year = null, play = null } = {}) {
   state.mode = mode;
@@ -282,6 +387,7 @@ function setMode(mode, { year = null, play = null } = {}) {
     : "BARS WORKS · LINE CHROMA · CLICK FOR TIMELAPSE";
   paintPlay();
   paintCopy();
+  syncURL();
 }
 
 /**
@@ -295,6 +401,7 @@ function setLayout(chrono) {
   state.chrono = chrono;
   state.dirty = true;
   paintCopy();
+  syncURL();
 }
 
 /* What the surface currently is, said in words. The field draws no axis lines —
@@ -327,10 +434,12 @@ function paintPlay() {
 function setPlaying(on) {
   state.playing = on && !reduceMotion;
   paintPlay();
+  syncURL();   // nothing is written while playing, so pausing is when the year lands
 }
 
 function setCursor(year) {
   state.cursor = clamp(year, state.field.y0, state.field.y1);
+  syncURL();
 }
 
 /* ---------- input ---------- */
@@ -417,6 +526,7 @@ function bindInput() {
     state.tlKey = "";
     state.dirty = true;   // particles leave the field without moving
     hideDetail();
+    syncURL();
   });
   el.btnInfo.addEventListener("click", () => { el.about.hidden = false; });
   el.aboutClose.addEventListener("click", () => { el.about.hidden = true; });
@@ -512,12 +622,14 @@ function showDetail(particle) {
   el.detailLink.href = src.url.replace("{}", encodeURIComponent(p.i));
   el.detailLink.textContent = `OPEN AT ${src.short} ↗`;
   el.detail.hidden = false;
+  syncURL();
 }
 
 function hideDetail() {
   el.detail.hidden = true;
   state.selected = -1;
   state.dirty = true;
+  syncURL();
 }
 
 /* ---------- init ---------- */
@@ -619,13 +731,7 @@ async function compose(data) {
   bindInput();
   setLayout(true);
   setMode("all");
-
-  // ?y=1600 opens straight into the timelapse at a year, paused: a moment in the
-  // field is worth being able to hand to someone.
-  const asked = Number(new URLSearchParams(location.search).get("y"));
-  if (Number.isFinite(asked) && asked >= state.field.y0 && asked <= state.field.y1) {
-    setMode("time", { year: asked, play: false });
-  }
+  applyURL();
 
   boot("> composing ...");
   await new Promise((resolve) => setTimeout(resolve, 460));
