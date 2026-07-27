@@ -114,6 +114,12 @@ export class Field {
     this.jy = new Float32Array(n);
     this.jr = new Float32Array(n);      // 0..1, sqrt-distributed for even blob fill
     this.phase = new Float32Array(n);
+    /* The breathing is sin(ωt + phase), which is 32,438 Math.sin calls a frame and
+       was the single most expensive thing in step(). Held as cos and sin of the
+       phase instead, the angle-addition identity turns it into two sines a frame
+       and a multiply-add per particle. Same number, arrived at by algebra. */
+    this.pcos = new Float32Array(n);
+    this.psin = new Float32Array(n);
 
     this.x = new Float32Array(n);       // live position, CSS px
     this.y = new Float32Array(n);
@@ -142,6 +148,8 @@ export class Field {
         this.jy[i] = Math.sin(a);
         this.jr[i] = Math.sqrt(hash01(i * 2 + 2));
         this.phase[i] = hash01(i * 7 + 3) * Math.PI * 2;
+        this.pcos[i] = Math.cos(this.phase[i]);
+        this.psin[i] = Math.sin(this.phase[i]);
         if (A < minA) minA = A; if (A > maxA) maxA = A;
         if (B < minB) minB = B; if (B > maxB) maxB = B;
         if (L < minL) minL = L; if (L > maxL) maxL = L;
@@ -377,28 +385,39 @@ export class Field {
     const n = this.n;
     const density = chrono ? this.densityT : this.density;
     const cell = chrono ? this.cellT : this.cell;
-    density.fill(0);
 
-    const stamp = ++this.seenStamp;
-    let total = 0, works = 0;
-    for (let i = 0; i < n; i++) {
-      if (nat >= 0 && this.natOf[i] !== nat) { this.w[i] = 0; continue; }
-      let wt = 1;
-      if (timed) {
-        const d = this.year[i] - year;
-        wt = Math.exp(-d * d * inv);
-        if (wt < MIN_WEIGHT) { this.w[i] = 0; continue; }
+    /* Which particles are present and how crowded each cell is depends on the year
+       and the filter, and on nothing else — not on t. Paused, or showing the whole
+       collection, this pass produced a byte-identical answer sixty times a second.
+       Keyed and skipped instead; the arrays are still there from last time, which
+       is why density is only cleared on the branch that refills it. */
+    const wKey = `${timed ? year : "a"}|${nat}|${chrono}`;
+    if (wKey !== this._wKey) {
+      this._wKey = wKey;
+      density.fill(0);
+      const stamp = ++this.seenStamp;
+      let total = 0, works = 0;
+      for (let i = 0; i < n; i++) {
+        if (nat >= 0 && this.natOf[i] !== nat) { this.w[i] = 0; continue; }
+        let wt = 1;
+        if (timed) {
+          const d = this.year[i] - year;
+          wt = Math.exp(-d * d * inv);
+          if (wt < MIN_WEIGHT) { this.w[i] = 0; continue; }
+        }
+        this.w[i] = wt;
+        const m = wt * this.mass[i];
+        density[cell[i]] += m;
+        total += m;
+        const o = this.owner[i];
+        if (this.seenAt[o] !== stamp) { this.seenAt[o] = stamp; works++; }
       }
-      this.w[i] = wt;
-      const m = wt * this.mass[i];
-      density[cell[i]] += m;
-      total += m;
-      const o = this.owner[i];
-      if (this.seenAt[o] !== stamp) { this.seenAt[o] = stamp; works++; }
-    }
 
-    let occupied = 0;
-    for (let c = 0; c < density.length; c++) if (density[c] > 0) occupied++;
+      let occupied = 0;
+      for (let c = 0; c < density.length; c++) if (density[c] > 0) occupied++;
+      this._weights = { total, works, occupied };
+    }
+    const { total, works, occupied } = this._weights;
 
     // Share of the period's measured colour, per cell of the plane — and then
     // relative to an even spread over the cells this period actually reaches. So
@@ -415,6 +434,9 @@ export class Field {
     const drift = reduceMotion ? 0 : DRIFT_PX;
     const ease = reduceMotion || !this.placed ? 1 : EASE;
 
+    const omega = t * DRIFT_HZ * Math.PI * 2;
+    const sinT = Math.sin(omega), cosT = Math.cos(omega);
+
     let colours = 0, from = this.y1, to = this.y0, moved = 0;
     for (let i = 0; i < n; i++) {
       const wt = this.w[i];
@@ -427,7 +449,8 @@ export class Field {
       const relative = density[cell[i]] * norm;
       const cells = Math.min(SPREAD_CAP,
         SPREAD_FLOOR + SPREAD_GAIN * Math.sqrt(relative)) * this.jr[i];
-      const wobble = drift * Math.sin(t * DRIFT_HZ * Math.PI * 2 + this.phase[i]);
+      // sin(ωt + phase), by the angle-addition identity — see pcos/psin above.
+      const wobble = drift * (sinT * this.pcos[i] + cosT * this.psin[i]);
       const tx = this.baseX(i) + this.jx[i] * (cells * cellPxX + wobble);
       const ty = this.baseY(i) + this.jy[i] * (cells * cellPxY + wobble);
 

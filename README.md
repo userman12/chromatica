@@ -328,6 +328,20 @@ Three things had to be fixed to get there, and two of them were not the particle
   to within a quarter of a pixel on particles several pixels wide. The timelapse
   reweights every particle on every frame, so there it always redraws.
 - A global alpha scale, as above, so the eightfold denser default is still a cloud.
+- **`step()` recomputes only what changed.** Two things in it did not depend on
+  the clock and were being redone sixty times a second anyway. Which particles are
+  present and how crowded each cell of the field is depend on the year and the
+  filter, so that whole pass is keyed and skipped when neither moved. And the idle
+  breathing, `sin(ωt + phase)` per particle, was 32,438 `Math.sin` calls a frame;
+  holding cos and sin of each phase turns it into two sines a frame and a
+  multiply-add per particle, by the angle-addition identity. Measured in node over
+  the real dataset, 32,438 particles: the whole collection **1.37 → 0.61 ms**, a
+  paused timelapse **0.42 → 0.07 ms**, one school **0.16 → 0.06 ms**, and a
+  playing timelapse 0.37 → 0.35, which is the case the cache cannot help because
+  the year changes every frame. Checked against the previous implementation over
+  450 frames across every mode: weights, radii and readout identical, positions
+  apart by at most 1.2 × 10⁻⁴ px — Float32 rounding in the identity, three orders
+  of magnitude under the redraw threshold.
 
 Colour is the one thing not optimised. 29,984 of the 32,438 particles are a
 distinct hex, so `fillStyle` is re-parsed for nearly every particle. Quantising the palette would collapse that to a few hundred parses, and
