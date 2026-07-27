@@ -20,6 +20,7 @@
  */
 import { Field, CHROMA_AXIS } from "./field.js";
 import { Nebula } from "./nebula.js";
+import { perf } from "./perf.js";
 
 const PLAY_YEARS_PER_SEC = 7.5;   // the timelapse crawl
 const SCRUB_SLOP = 4;             // px of movement still counted as a click
@@ -109,6 +110,7 @@ let t0 = 0;
 let last = 0;
 
 function frame(now) {
+  if (perf) perf.frame(now);
   const t = (now - (t0 ||= now)) / 1000;
   const dt = Math.min(0.05, (now - (last || now)) / 1000);
   last = now;
@@ -118,10 +120,12 @@ function frame(now) {
     if (state.cursor > state.field.y1) state.cursor = state.field.y0;   // a timelapse loops
   }
 
+  const tStep = perf ? performance.now() : 0;
   state.field.step({
     year: state.mode === "time" ? state.cursor : null,
     t, reduceMotion, nat: state.nat, chrono: state.chrono,
   });
+  if (perf) perf.step(performance.now() - tStep);
 
   // The same amount of ink whatever the particle count: the whole span puts about
   // eight times more colour on the canvas than one window does, and at equal alpha
@@ -133,12 +137,15 @@ function frame(now) {
   // something new to draw. The whole-collection view usually has nothing.
   state.debt += state.field.motion;
   if (state.dirty || state.mode === "time" || state.debt >= REDRAW_PX) {
+    const tDraw = perf ? performance.now() : 0;
     nebula.draw(state.field, state.selected, intensity);
+    if (perf) perf.draw(performance.now() - tDraw);
     state.debt = 0;
     state.dirty = false;
   }
   paintReadout();
   drawTimeline();
+  if (perf) perf.render(now, state.field);
   requestAnimationFrame(frame);
 }
 

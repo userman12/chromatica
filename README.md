@@ -306,6 +306,15 @@ particles — 2.8× denser — and those numbers have not been re-measured on a 
 browser, so treat them as the design target rather than as the current reading.
 The two optimisations below are what create the headroom for the increase.
 
+**Append `?perf=1`** to check that claim rather than inherit it. An overlay
+appears carrying frame interval, `step()` and draw cost as p50 and p95 over a
+rolling three seconds, and the share of frames that reached a draw at all — that
+last one is the number that says whether the retained-canvas optimisation below
+is still working. Percentiles rather than means, because a 16.7 ms mean is
+equally consistent with a steady 60 fps and with alternating 8 and 25 ms frames,
+and only one of those is watchable. Without the flag the module exports `null`
+and no timing call is made.
+
 Three things had to be fixed to get there, and two of them were not the particles:
 
 - **The readout and the 600-bar strip are only rewritten when a value changes.**
