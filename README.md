@@ -419,9 +419,30 @@ order, so `cezanne` finds Cézanne's 60 works and `virgin child` finds 91
 regardless of how the title is phrased; dimmed particles stay clickable. The
 count beside the box reads matches against works *shown*, not against the whole
 dataset, because with a school or a year window on those are two different
-numbers. Keyboard, in the timelapse: arrows ±1 year,
+numbers. Knowing that seventy works answered is not the same as finding one of
+them, so Enter walks the matches and shift+Enter walks them back: each step rings
+one blob and opens its painting, in year order, taking each work's largest
+cluster and skipping any faded below the drawing threshold — a ring around
+nothing identifies nothing. The count becomes your position in the matches while
+you walk. Matched particles are not enlarged: radius here is the colour's share
+of its painting, and inflating it to answer a search would be drawing a number
+the data does not hold. Keyboard, in the timelapse: arrows ±1 year,
 Shift ±10, PageUp/Down ±50, Home/End, space plays and pauses; Escape closes a
 panel.
+
+**Nothing in the interface moves.** The field is a canvas that fills whatever box
+the two bars leave it, so any control that changes size changes the picture: the
+play button appearing on TIMELAPSE used to shorten the field by 43 px, and
+CHROMATIC PLANE, five characters longer than CHRONOLOGY, used to shove every
+button beside it. Controls that belong to one mode are hidden with `visibility`
+rather than `hidden`, keeping their space while leaving the tab order; every
+label that changes text is shown each of its variants once at boot and pinned to
+the widest — measured, not computed in `ch`, because the face is whatever the
+machine has. The stage is watched with a `ResizeObserver` rather than the window,
+since a footer that grows is not a window resize and the canvas would otherwise
+be stretched from a stale backing store, which is also what put the selection
+ring above the pointer. Verified by clicking through every mode in a real browser
+and diffing the rectangle of each control: across all switches, zero pixels.
 
 **The view is in the URL**, so a reading of the field can be handed to someone:
 `?y=1600` opens the timelapse at a year, paused, `?plane=1` on the chromatic

@@ -72,6 +72,8 @@ const state = {
   nat2: -1,           // a second school shown beside the first, -1 for none
   query: "",          // free text over title and artist; dims, never removes
   selected: -1,       // particle index
+  matchAt: -1,        // position in the current list of matches, -1 = not stepping
+  matchTotal: 0,
   hover: -1,
   cssW: 0, cssH: 0,
   tlW: 0, tlH: 0,
@@ -116,6 +118,51 @@ function measure() {
   state.tlH = el.timeline.clientHeight;
   state.tlKey = "";   // force the strip to redraw at the new size
   state.dirty = true;
+}
+
+/* Nothing in these two bars may change width when its text changes. CHROMATIC
+   PLANE is five characters longer than CHRONOLOGY, so pressing it moved every
+   button beside it; the works count loses a digit as you scrub, so the readout
+   above the field twitched sixty times a second. Both are the same fault as the
+   footer that resized the canvas: this interface sits around a picture, and a
+   control that grows pushes the picture.
+   Measured rather than computed. The font is whatever the machine has — there is
+   no @font-face here — so a width in `ch` would be right on the machines that
+   have JetBrains Mono and wrong on the rest. Each element is shown every string
+   it will ever hold, and keeps the widest. */
+function lockWidths() {
+  const lock = (node, variants) => {
+    const text = node.textContent, cls = node.className;
+    node.style.minWidth = "";   // or a second pass would only ever measure the first
+    let widest = 0;
+    for (const v of variants) {
+      node.textContent = typeof v === "string" ? v : v.text;
+      if (typeof v !== "string") node.className = v.className;
+      widest = Math.max(widest, node.getBoundingClientRect().width);
+    }
+    node.textContent = text;
+    node.className = cls;
+    node.style.minWidth = `${Math.ceil(widest)}px`;
+  };
+  const F = state.field, works = state.data.paintings.length;
+  const wholeSpan = span(F.y0, F.y1);
+  lock(el.btnLayout, ["CHROMATIC PLANE", "CHRONOLOGY"]);
+  lock(el.btnPlay, ["❚❚", "▶"]);
+  lock(el.cursorLabel, ["SHOWING", "YEAR"]);
+  lock(el.cursorValue, [
+    { text: "ALL YEARS", className: "cursor__year is-word" },
+    { text: String(F.y1), className: "cursor__year" },
+  ]);
+  lock(el.cursorSpan, [wholeSpan]);
+  lock(el.statWorks, [num(works)]);
+  lock(el.statColours, [num(F.n)]);
+  lock(el.statSpan, [wholeSpan, "—"]);
+  lock(el.statWindow, ["ALL", "±999 YR"]);
+  lock(el.searchCount, [`${num(works)} OF ${num(works)} ↵`]);
+  // Every combination the strip's own label can take, since it sits beside a
+  // canvas that takes the rest of the row.
+  lock(el.timelineLabel, ["LINE", "LINE+DASH"].flatMap((k) =>
+    ["DRAG TO SCRUB", "CLICK FOR TIMELAPSE"].map((a) => `BARS WORKS · ${k} CHROMA · ${a}`)));
 }
 
 /* ---------- the loop ---------- */
@@ -179,8 +226,13 @@ function paintReadout() {
   put(el.statWindow, "window",
     state.mode === "time" ? `±${Math.round(s.sigma)} YR` : "ALL");
   // Matches among the works actually on screen, not in the whole dataset: with a
-  // school or a year window on, those are two different numbers.
-  put(el.searchCount, "matched", state.query ? `${num(s.matched)} OF ${num(s.works)}` : "");
+  // school or a year window on, those are two different numbers. Once you start
+  // walking the matches the count becomes your position in them, because that is
+  // then the more useful of the two numbers.
+  put(el.searchCount, "matched",
+    !state.query ? ""
+      : state.matchAt >= 0 ? `${state.matchAt + 1}/${num(state.matchTotal)} ↵`
+        : `${num(s.matched)} OF ${num(s.works)} ↵`);
 
   if (state.mode !== "time") return;
   const year = Math.round(state.cursor);
@@ -479,8 +531,27 @@ function setQuery(query) {
   state.query = query;
   state.field.setSearch(query);
   if (el.search.value !== query) el.search.value = query;
+  state.matchAt = -1;   // a different question has a different set of answers
+  state.matchTotal = 0;
   state.dirty = true;   // alpha and radius change; nothing moves
   syncURL();
+}
+
+/* Enter walks the matches, shift+Enter walks them backwards, and each step rings
+   one blob and opens it. The count alone left you knowing that forty works
+   answered and unable to find one of them; a ring you can step is the shortest
+   route from "forty" to "that one, there".
+   The matched particles are not made larger to stand out. Radius here is the
+   colour's share of its painting, and inflating it to answer a search would be
+   drawing a number the data does not hold. */
+function stepMatch(dir) {
+  const list = state.field.matchList();
+  state.matchTotal = list.length;
+  if (!list.length) { state.matchAt = -1; return; }
+  const here = list.indexOf(state.selected);
+  const k = here >= 0 ? here + dir : (dir > 0 ? 0 : list.length - 1);
+  state.matchAt = ((k % list.length) + list.length) % list.length;
+  showDetail(list[state.matchAt]);
 }
 
 /* What the surface currently is, said in words. The field draws no axis lines —
@@ -612,6 +683,11 @@ function bindInput() {
   // listener covers typing, pasting and the ×.
   el.search.addEventListener("input", () => setQuery(el.search.value.trim()));
   el.search.addEventListener("keydown", (event) => {
+    if (event.key === "Enter") {
+      event.preventDefault();
+      stepMatch(event.shiftKey ? -1 : 1);
+      return;
+    }
     if (event.key !== "Escape") return;
     event.stopPropagation();   // Escape in the box clears it; it does not close the panel
     setQuery("");
@@ -720,6 +796,7 @@ function showDetail(particle) {
 function hideDetail() {
   el.detail.hidden = true;
   state.selected = -1;
+  state.matchAt = -1;   // no ring standing, so the count goes back to the total
   state.dirty = true;
   syncURL();
 }
@@ -824,6 +901,9 @@ async function compose(data) {
   bindInput();
   setLayout(true);
   setMode("all");
+  lockWidths();
+  // Widths measured in a fallback face are wrong once the real one arrives.
+  if (document.fonts?.ready) document.fonts.ready.then(lockWidths);
   applyURL();
 
   boot("> composing ...");

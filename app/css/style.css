@@ -93,7 +93,10 @@ body { display: flex; flex-direction: column; }
 .readout > div { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; }
 .readout dt { font-size: 8px; letter-spacing: .16em; color: #4a504c; }
 .readout dt, .readout dd, .hud__sub { white-space: nowrap; }
-.readout dd { margin: 0; color: var(--text-bright); font-size: 12px; font-weight: 500; }
+/* Each dd is held at the width of its widest possible value (see lockWidths), so
+   the text inside it has to be pinned to the right or the numbers would jitter
+   inside their own reserved box while you scrub. */
+.readout dd { margin: 0; color: var(--text-bright); font-size: 12px; font-weight: 500; text-align: right; }
 
 /* Author and source: same weight as the readout, lit only when pointed at. */
 .credit { display: flex; align-items: center; gap: 3px; }
@@ -144,11 +147,13 @@ body { display: flex; flex-direction: column; }
 /* ---------- bottom controls ---------- */
 .controls { display: flex; align-items: center; gap: 18px; flex-wrap: wrap; }
 
-/* min-height because the row is baseline-aligned: 21px and 13px numerals sit on
-   the same baseline but hang different amounts below it, which is another one or
-   two pixels of footer that would move the field. */
-.cursor { display: flex; align-items: baseline; gap: 8px; min-height: 26px; }
-.cursor__range { display: flex; align-items: baseline; gap: 6px; margin-left: 6px; }
+/* min-height so the row keeps its box whatever is in it, and centred rather than
+   baseline-aligned. The year swaps between 21px digits and a 13px
+   word, and two type sizes on a shared baseline sit at different heights in the
+   same 26px line box — enough to drop the label beside it by 3px every time the
+   mode changed. Both boxes are 26px tall, so centring them holds everything. */
+.cursor { display: flex; align-items: center; gap: 8px; min-height: 26px; }
+.cursor__range { display: flex; align-items: center; gap: 6px; margin-left: 6px; }
 .cursor__range b { color: var(--text-bright); font-size: 11px; font-weight: 500; }
 .cursor__label { font-size: 8px; letter-spacing: .16em; color: #4a504c; }
 /* Present in the layout, absent from the picture. The footer sits directly under
@@ -183,7 +188,11 @@ body { display: flex; flex-direction: column; }
 }
 #search::placeholder { color: #4a504c; letter-spacing: .12em; }
 #search:focus-visible { outline: 1px solid var(--accent); outline-offset: 1px; }
-.filter__count { font-size: 8px; letter-spacing: .14em; color: var(--accent); min-width: 74px; white-space: nowrap; }
+/* Height fixed rather than derived from the content: this span is empty until
+   you search, and an empty inline box is zero pixels tall, so the first keystroke
+   used to shove the row it sits in. Its width is pinned in JS. */
+.filter__count { font-size: 8px; letter-spacing: .14em; color: var(--accent); white-space: nowrap;
+  display: inline-block; height: 14px; line-height: 14px; }
 .filter__label { font-size: 8px; letter-spacing: .16em; color: #4a504c; }
 /* Which select owns which chroma line in the strip. The two curves are the same
    near-white — a second colour in there would compete with the histogram — so

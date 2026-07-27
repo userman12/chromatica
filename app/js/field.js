@@ -387,6 +387,36 @@ export class Field {
   }
 
   /**
+   * One particle per matching work, in year order, for stepping through a search.
+   *
+   * A count of matches tells you how many there are but not where they are, and
+   * dimming everything else only narrows the haystack. This gives the caller a
+   * blob to point at.
+   *
+   * The particle chosen for a work is its first drawn cluster, and palettes are
+   * stored largest share first, so that is the biggest patch of the work — the
+   * one large enough to see. Clusters below the drawing threshold are skipped:
+   * pointing at a work that a year window has faded out would be a ring around
+   * nothing. Year order rather than index order, because the index order is the
+   * order four catalogues happened to be merged in.
+   *
+   * @returns {number[]} particle indices, empty when nothing is being searched
+   */
+  matchList() {
+    if (!this.searching) return [];
+    const out = [];
+    let seen = -1;
+    for (let i = 0; i < this.n; i++) {
+      const o = this.owner[i];
+      if (o === seen || this.matchOf[o] !== 1 || this.w[i] < 0.12) continue;
+      seen = o;
+      out.push(i);
+    }
+    out.sort((a, b) => this.year[a] - this.year[b] || a - b);
+    return out;
+  }
+
+  /**
    * Window width, in years, at a given point on the scrubber.
    *
    * A fixed window would be dishonest in both directions: coverage swings about
