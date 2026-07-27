@@ -39,6 +39,8 @@
 
 import { ORDER_BAND } from "./field.js";
 
+// Beyond this many matching works the rings stop being marks and become noise.
+const MARK_CAP = 200;
 const ACCENT = "#00ff9d";
 const BG = "#0a0a0a";
 const GLOW_SCALE = 0.34;   // resolution of the blur bed
@@ -225,7 +227,30 @@ export class Nebula {
     ctx.fillStyle = this.scan;
     ctx.fillRect(0, 0, this.cssW, this.cssH);
 
-    // --- the one interface mark allowed inside the field ---
+    /* --- the marks, and the only ones allowed inside the field ---
+       A search that only dims the rest answers "how many" and not "which ones":
+       at 22% the non-matches are still thousands of blobs, and five Caravaggios
+       among them are unfindable. So every matching work gets a thin ring on its
+       largest visible patch. Rings rather than a brighter or bigger particle,
+       because size and opacity here are measurements — this is the interface
+       pointing at the data, kept visibly separate from it.
+       Above a couple of hundred the rings stop being marks and become a texture
+       of their own, so past that only the count and the list speak. */
+    if (field.markN > 0 && field.markN <= MARK_CAP) {
+      ctx.globalAlpha = 0.62;
+      ctx.strokeStyle = ACCENT;
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      for (let k = 0; k < field.markN; k++) {
+        const i = field.marks[k];
+        // Each arc gets its own sub-path, or they would be strung together by the
+        // line the path carries from one circle to the next.
+        ctx.moveTo(x[i] + rad[i] + 4.5, y[i]);
+        ctx.arc(x[i], y[i], rad[i] + 4.5, 0, TAU);
+      }
+      ctx.stroke();
+    }
+
     if (selected >= 0 && w[selected] > 0) {
       ctx.globalAlpha = 0.9;
       ctx.strokeStyle = ACCENT;

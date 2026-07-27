@@ -45,7 +45,7 @@ const el = {
   cursorLabel: $("cursorLabel"), cursorValue: $("cursorValue"),
   cursorRange: $("cursorRange"), cursorSpan: $("cursorSpan"),
   natFilter: $("natFilter"), natFilter2: $("natFilter2"),
-  search: $("search"), searchCount: $("searchCount"),
+  search: $("search"), searchCount: $("searchCount"), searchList: $("searchList"),
   btnTimelapse: $("btnTimelapse"), btnPlay: $("btnPlay"),
   btnReset: $("btnReset"), btnInfo: $("btnInfo"),
   timeline: $("timelineCanvas"), timelineLabel: $("timelineLabel"),
@@ -74,6 +74,9 @@ const state = {
   selected: -1,       // particle index
   matchAt: -1,        // position in the current list of matches, -1 = not stepping
   matchTotal: 0,
+  matchIds: [],       // the matching particles, in the order the list shows them
+  preview: -1,        // particle ringed by pointing at a result row, not selected
+  listKey: null,      // field.viewKey the list was built from
   hover: -1,
   cssW: 0, cssH: 0,
   tlW: 0, tlH: 0,
@@ -187,6 +190,13 @@ function frame(now) {
   });
   if (perf) perf.step(performance.now() - tStep);
 
+  // The matches are what is on screen, so the list of them is rebuilt when what
+  // is on screen changes — not every frame, and not only when you type.
+  if (state.field.viewKey !== state.listKey) {
+    state.listKey = state.field.viewKey;
+    paintMatchList();
+  }
+
   // The same amount of ink whatever the particle count: the whole span puts about
   // eight times more colour on the canvas than one window does, and at equal alpha
   // it would stop being a cloud and become a slab. Alpha only — no hue is touched.
@@ -198,7 +208,9 @@ function frame(now) {
   state.debt += state.field.motion;
   if (state.dirty || state.mode === "time" || state.debt >= REDRAW_PX) {
     const tDraw = perf ? performance.now() : 0;
-    nebula.draw(state.field, state.selected, intensity);
+    // A row pointed at in the results list rings its blob without selecting it:
+    // running the eye down the list should light up the field, not open panels.
+    nebula.draw(state.field, state.preview >= 0 ? state.preview : state.selected, intensity);
     if (perf) perf.draw(performance.now() - tDraw);
     state.debt = 0;
     state.dirty = false;
@@ -537,12 +549,47 @@ function setQuery(query) {
   syncURL();
 }
 
+/* Which paintings answered, said in words.
+   The field can show where the matches are — every one of them is ringed — but a
+   ring is a position, not a name, and "which of these is which" is not a question
+   a cloud of colour can answer. So the search prints its results: year, title,
+   artist, in chronological order, the same order and the same set as the rings.
+   Pointing at a row lights its ring on the field, clicking it opens the work.
+   That is the whole bridge between the two halves of the answer. */
+const MATCH_ROWS = 200;   // the cap the rings use too: past it, marks become texture
+
+function paintMatchList() {
+  const list = state.field.matchList();
+  state.preview = -1;   // the rows are about to be replaced; the index would be stale
+  state.matchTotal = list.length;
+  if (state.matchAt >= list.length) state.matchAt = -1;
+  if (!state.query || !list.length) {
+    el.searchList.hidden = true;
+    el.searchList.innerHTML = "";
+    state.matchIds = [];
+    return;
+  }
+  const shown = list.slice(0, MATCH_ROWS);
+  state.matchIds = list;
+  const F = state.field;
+  el.searchList.innerHTML = shown.map((i, k) => {
+    const p = state.data.paintings[F.owner[i]];
+    return `<li data-k="${k}" class="${k === state.matchAt ? "is-at" : ""}">`
+      + `<b>${span(p.s, p.e)}</b><span>${escapeHtml(p.t || "Untitled")}`
+      + `<i>${escapeHtml(p.a || "Unattributed")}</i></span></li>`;
+  }).join("")
+    + (list.length > shown.length
+      ? `<li class="findlist__more">${num(list.length - shown.length)} MORE — NARROW THE SEARCH</li>`
+      : "");
+  el.searchList.hidden = false;
+}
+
 /* Enter walks the matches, shift+Enter walks them backwards, and each step rings
-   one blob and opens it. The count alone left you knowing that forty works
-   answered and unable to find one of them; a ring you can step is the shortest
-   route from "forty" to "that one, there".
-   The matched particles are not made larger to stand out. Radius here is the
-   colour's share of its painting, and inflating it to answer a search would be
+   one blob, opens it, and moves the highlight down the list — so the name and the
+   position on the field are read together.
+   The matched particles are not made larger or brighter to stand out; only the
+   rings are added. Radius and opacity here are measurements — share of the
+   palette, weight in the window — and bending them to answer a search would be
    drawing a number the data does not hold. */
 function stepMatch(dir) {
   const list = state.field.matchList();
@@ -552,6 +599,13 @@ function stepMatch(dir) {
   const k = here >= 0 ? here + dir : (dir > 0 ? 0 : list.length - 1);
   state.matchAt = ((k % list.length) + list.length) % list.length;
   showDetail(list[state.matchAt]);
+  markMatchRow();
+}
+
+function markMatchRow() {
+  const rows = el.searchList.children;
+  for (let k = 0; k < rows.length; k++) rows[k].classList.toggle("is-at", k === state.matchAt);
+  rows[state.matchAt]?.scrollIntoView({ block: "nearest" });
 }
 
 /* What the surface currently is, said in words. The field draws no axis lines —
@@ -682,6 +736,29 @@ function bindInput() {
   // "search" inputs fire input on the browser's own clear button too, so one
   // listener covers typing, pasting and the ×.
   el.search.addEventListener("input", () => setQuery(el.search.value.trim()));
+
+  /* Delegated, because the rows are rewritten whenever the visible set changes.
+     Pointing at a row rings its work on the field; clicking opens it. */
+  el.searchList.addEventListener("pointerover", (event) => {
+    const row = event.target.closest("li[data-k]");
+    const next = row ? state.matchIds[+row.dataset.k] : -1;
+    if (next === state.preview) return;
+    state.preview = next ?? -1;
+    state.dirty = true;
+  });
+  el.searchList.addEventListener("pointerleave", () => {
+    if (state.preview < 0) return;
+    state.preview = -1;
+    state.dirty = true;
+  });
+  el.searchList.addEventListener("click", (event) => {
+    const row = event.target.closest("li[data-k]");
+    if (!row) return;
+    state.matchAt = +row.dataset.k;
+    state.preview = -1;
+    showDetail(state.matchIds[state.matchAt]);
+    markMatchRow();
+  });
   el.search.addEventListener("keydown", (event) => {
     if (event.key === "Enter") {
       event.preventDefault();
@@ -797,6 +874,7 @@ function hideDetail() {
   el.detail.hidden = true;
   state.selected = -1;
   state.matchAt = -1;   // no ring standing, so the count goes back to the total
+  markMatchRow();
   state.dirty = true;
   syncURL();
 }

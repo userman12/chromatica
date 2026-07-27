@@ -419,14 +419,24 @@ order, so `cezanne` finds Cézanne's 60 works and `virgin child` finds 91
 regardless of how the title is phrased; dimmed particles stay clickable. The
 count beside the box reads matches against works *shown*, not against the whole
 dataset, because with a school or a year window on those are two different
-numbers. Knowing that seventy works answered is not the same as finding one of
-them, so Enter walks the matches and shift+Enter walks them back: each step rings
-one blob and opens its painting, in year order, taking each work's largest
-cluster and skipping any faded below the drawing threshold — a ring around
-nothing identifies nothing. The count becomes your position in the matches while
-you walk. Matched particles are not enlarged: radius here is the colour's share
-of its painting, and inflating it to answer a search would be drawing a number
-the data does not hold. Keyboard, in the timelapse: arrows ±1 year,
+numbers.
+
+A count, though, says how many answered and not which. At 22% the rest of the
+field is still thousands of blobs, and five Caravaggios inside it are unfindable
+by eye, so the search answers in three places at once. Every matching work gets a
+thin ring on its largest visible patch — rings rather than a brighter or larger
+particle, because opacity is weight and radius is the colour's share of its
+painting, and bending either to answer a search would be drawing a number the
+data does not hold. Beside the box the matches are *named*: year, title, artist,
+in chronological order, which is the half a field of colour cannot say. Pointing
+at a row rings its work on the field without opening anything; clicking opens it;
+Enter and shift+Enter walk the list from the keyboard, and the count becomes your
+position in it. Rings, list and stepping are one array filled by the pass that
+computes the weights, so they cannot disagree about what matched, and all three
+follow the visible set: with a year window on, a work outside it is not listed,
+because a ring around something that has faded out identifies nothing. Past 200
+matches the rings would be a texture rather than marks, so the list carries it
+alone. Keyboard, in the timelapse: arrows ±1 year,
 Shift ±10, PageUp/Down ±50, Home/End, space plays and pauses; Escape closes a
 panel.
 

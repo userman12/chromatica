@@ -239,6 +239,11 @@ export class Field {
     // a stamp per painting, compared against the frame's own stamp.
     this.seenStamp = 0;
     this.seenAt = new Int32Array(paintings.length);
+    /* One particle per matching work, refilled by the same pass that computes the
+       weights. `markN` is how much of it is live; the array is never reallocated. */
+    this.marks = new Int32Array(paintings.length);
+    this.markN = 0;
+    this.searchKey = "";
   }
 
   /**
@@ -382,7 +387,8 @@ export class Field {
       this.matchOf[pi] = hit ? 1 : SEARCH_DIM;
       if (hit) matched++;
     }
-    this._wKey = "";   // the weights depend on this now, so they have to be redone
+    // The weights depend on the query, so the query is part of their key.
+    this.searchKey = query;
     return this.searching ? matched : 0;
   }
 
@@ -393,25 +399,15 @@ export class Field {
    * dimming everything else only narrows the haystack. This gives the caller a
    * blob to point at.
    *
-   * The particle chosen for a work is its first drawn cluster, and palettes are
-   * stored largest share first, so that is the biggest patch of the work — the
-   * one large enough to see. Clusters below the drawing threshold are skipped:
-   * pointing at a work that a year window has faded out would be a ring around
-   * nothing. Year order rather than index order, because the index order is the
-   * order four catalogues happened to be merged in.
+   * The particles are the ones `step()` collected — the same set the field puts
+   * rings on, so the list, the rings and the stepping can never disagree about
+   * what answered. Year order rather than index order, because the index order is
+   * the order four catalogues happened to be merged in.
    *
    * @returns {number[]} particle indices, empty when nothing is being searched
    */
   matchList() {
-    if (!this.searching) return [];
-    const out = [];
-    let seen = -1;
-    for (let i = 0; i < this.n; i++) {
-      const o = this.owner[i];
-      if (o === seen || this.matchOf[o] !== 1 || this.w[i] < 0.12) continue;
-      seen = o;
-      out.push(i);
-    }
+    const out = Array.from(this.marks.subarray(0, this.markN));
     out.sort((a, b) => this.year[a] - this.year[b] || a - b);
     return out;
   }
@@ -468,13 +464,13 @@ export class Field {
        collection, this pass produced a byte-identical answer sixty times a second.
        Keyed and skipped instead; the arrays are still there from last time, which
        is why density is only cleared on the branch that refills it. */
-    const wKey = `${timed ? year : "a"}|${nat}|${nat2}|${chrono}`;
+    const wKey = `${timed ? year : "a"}|${nat}|${nat2}|${chrono}|${this.searchKey}`;
     if (wKey !== this._wKey) {
       this._wKey = wKey;
       density.fill(0);
       const stamp = ++this.seenStamp;
       const searching = this.searching, matchOf = this.matchOf;
-      let total = 0, works = 0, matched = 0;
+      let total = 0, works = 0, matched = 0, markN = 0;
       for (let i = 0; i < n; i++) {
         const school = this.natOf[i];
         if (nat >= 0 && school !== nat && school !== nat2) { this.w[i] = 0; continue; }
@@ -496,15 +492,28 @@ export class Field {
         if (this.seenAt[o] !== stamp) {
           this.seenAt[o] = stamp;
           works++;
-          if (searching && matchOf[o] === 1) matched++;
+          if (searching && matchOf[o] === 1) {
+            matched++;
+            // First drawn cluster of a matching work, and palettes are stored
+            // largest share first, so this is its biggest visible patch — the one
+            // worth putting a ring on. Collected here rather than in a pass of its
+            // own: this loop already walks every particle and already knows which
+            // owner it is meeting for the first time.
+            if (this.w[i] >= 0.12) this.marks[markN++] = i;
+          }
         }
       }
 
       let occupied = 0;
       for (let c = 0; c < density.length; c++) if (density[c] > 0) occupied++;
-      this._weights = { total, works, occupied, matched };
+      this._weights = { total, works, occupied, matched, markN };
     }
-    const { total, works, occupied, matched } = this._weights;
+    const { total, works, occupied, matched, markN } = this._weights;
+    this.markN = markN;
+    /* Which particles are on screen, as one string. Anything downstream that has
+       to be rebuilt when the visible set changes — the list of what a search
+       matched — compares this instead of guessing from the year. */
+    this.viewKey = wKey;
 
     // Share of the period's measured colour, per cell of the plane — and then
     // relative to an even spread over the cells this period actually reaches. So

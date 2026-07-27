@@ -180,6 +180,31 @@ body { display: flex; flex-direction: column; }
 .filter { display: flex; align-items: center; gap: 7px; margin-left: auto; }
 .filter--vs { margin-left: 0; }
 .filter--find { margin-left: auto; }
+/* The answer, by name. Anchored to the FIND control and opening upward over the
+   field, because it is a reading of the field and belongs beside it rather than
+   in a page of its own. Narrow and capped in height: it names what matched, it
+   does not become the piece. */
+.filter--find { position: relative; }
+.findlist {
+  position: absolute; right: 0; bottom: calc(100% + 9px); z-index: 30;
+  margin: 0; padding: 0; list-style: none;
+  width: 330px; max-height: 46vh; overflow-y: auto;
+  background: #050505f2; border: 1px solid var(--accent);
+  box-shadow: 0 8px 34px #000000d9;
+}
+.findlist li {
+  display: flex; gap: 8px; align-items: baseline;
+  padding: 4px 9px; cursor: pointer; border-bottom: 1px solid #ffffff0d;
+}
+.findlist li:last-child { border-bottom: none; }
+.findlist li:hover, .findlist li.is-at { background: var(--accent-dim); }
+/* The year first and in the accent: this collection is read along time, so the
+   date is the coordinate you are looking the work up by. */
+.findlist b { color: var(--accent); font-weight: 500; font-size: 10px; flex: 0 0 62px; }
+.findlist span { color: var(--text-bright); font-size: 10px; line-height: 1.45; min-width: 0; }
+.findlist i { display: block; color: #6f7671; font-style: normal; font-size: 9px; }
+.findlist .findlist__more { color: #4a504c; cursor: default; justify-content: center; font-size: 9px; letter-spacing: .14em; }
+.findlist .findlist__more:hover { background: none; }
 #search {
   appearance: none; background: #111; color: var(--text-bright);
   border: 1px solid var(--line); border-radius: 0;
