@@ -309,7 +309,12 @@ export class Field {
    * @returns {{v: Float32Array, ok: Uint8Array}} chroma per year, and where it means anything
    */
   chromaCurve(nat = -1) {
-    if (this._curveNat === nat) return this._curve;
+    // Cached per school, not just for the last one asked: comparing two schools
+    // draws two curves every time the strip is rebuilt, and one slot would have
+    // meant recomputing both on every scrub.
+    this._curves ??= new Map();
+    const hit = this._curves.get(nat);
+    if (hit) return hit;
     const N = this.perYear.length;
     const sum = new Float64Array(N), cnt = new Float64Array(N);
     for (let i = 0; i < this.n; i++) {
@@ -337,9 +342,9 @@ export class Field {
       ok[i] = den >= MIN_SUPPORT * 5 ? 1 : 0;
     }
 
-    this._curveNat = nat;
-    this._curve = { v, ok };
-    return this._curve;
+    const curve = { v, ok };
+    this._curves.set(nat, curve);
+    return curve;
   }
 
   /**
@@ -372,12 +377,15 @@ export class Field {
    * `year` is the timelapse cursor, or null for the default state: the whole
    * collection at once, every painting weighted the same. `nat` is a school index
    * or -1 for all schools — a filter, so a school shows its own colour tradition
-   * rather than being averaged into everyone else's. `chrono` picks the layout:
+   * rather than being averaged into everyone else's. `nat2` is an optional second
+   * school shown beside the first: the comparison the data invites most is one
+   * tradition against another over the same centuries, and one filter could only
+   * ever answer half of it. `chrono` picks the layout:
    * true for year × lightness, false for the a* and b* chromatic plane.
    *
    * Returns nothing; positions and weights are read straight off the arrays.
    */
-  step({ year = null, t = 0, reduceMotion = false, nat = -1, chrono = true }) {
+  step({ year = null, t = 0, reduceMotion = false, nat = -1, nat2 = -1, chrono = true }) {
     const timed = year !== null;
     const sigma = timed ? this.sigmaAt(year) : 0;
     const inv = timed ? 1 / (2 * sigma * sigma) : 0;
@@ -391,14 +399,15 @@ export class Field {
        collection, this pass produced a byte-identical answer sixty times a second.
        Keyed and skipped instead; the arrays are still there from last time, which
        is why density is only cleared on the branch that refills it. */
-    const wKey = `${timed ? year : "a"}|${nat}|${chrono}`;
+    const wKey = `${timed ? year : "a"}|${nat}|${nat2}|${chrono}`;
     if (wKey !== this._wKey) {
       this._wKey = wKey;
       density.fill(0);
       const stamp = ++this.seenStamp;
       let total = 0, works = 0;
       for (let i = 0; i < n; i++) {
-        if (nat >= 0 && this.natOf[i] !== nat) { this.w[i] = 0; continue; }
+        const school = this.natOf[i];
+        if (nat >= 0 && school !== nat && school !== nat2) { this.w[i] = 0; continue; }
         let wt = 1;
         if (timed) {
           const d = this.year[i] - year;

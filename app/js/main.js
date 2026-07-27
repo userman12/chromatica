@@ -44,7 +44,7 @@ const el = {
   axes: $("axes"), btnLayout: $("btnLayout"),
   cursorLabel: $("cursorLabel"), cursorValue: $("cursorValue"),
   cursorRange: $("cursorRange"), cursorSpan: $("cursorSpan"),
-  natFilter: $("natFilter"),
+  natFilter: $("natFilter"), natFilter2: $("natFilter2"),
   btnTimelapse: $("btnTimelapse"), btnPlay: $("btnPlay"),
   btnReset: $("btnReset"), btnInfo: $("btnInfo"),
   timeline: $("timelineCanvas"), timelineLabel: $("timelineLabel"),
@@ -68,6 +68,7 @@ const state = {
   playing: false,
   cursor: 0,          // the timelapse year, kept as a float so play is smooth
   nat: -1,            // school filter, -1 for all
+  nat2: -1,           // a second school shown beside the first, -1 for none
   selected: -1,       // particle index
   hover: -1,
   cssW: 0, cssH: 0,
@@ -123,7 +124,7 @@ function frame(now) {
   const tStep = perf ? performance.now() : 0;
   state.field.step({
     year: state.mode === "time" ? state.cursor : null,
-    t, reduceMotion, nat: state.nat, chrono: state.chrono,
+    t, reduceMotion, nat: state.nat, nat2: state.nat2, chrono: state.chrono,
   });
   if (perf) perf.step(performance.now() - tStep);
 
@@ -194,8 +195,8 @@ function drawTimeline() {
   // nat belongs in both keys: the curve follows the filter, so a school change
   // has to invalidate the strip even mid-timelapse, where it once did not.
   const key = timed
-    ? `t|${from}|${to}|${Math.round(state.cursor)}|${state.nat}`
-    : `a|${state.nat}`;
+    ? `t|${from}|${to}|${Math.round(state.cursor)}|${state.nat}|${state.nat2}`
+    : `a|${state.nat}|${state.nat2}`;
   if (key === state.tlKey) return;
   state.tlKey = key;
 
@@ -229,27 +230,41 @@ function drawTimeline() {
   // Drawn twice: once thick in the panel colour, then thin in near-white. The
   // dark pass is not a shadow, it is a gap cut in the histogram so the line stays
   // one line where it crosses a lit bar of nearly its own weight.
-  const { v, ok } = F.chromaCurve(state.nat);
   const [cLo, cHi] = CHROMA_AXIS;
   const top = h * 0.12, span = h * 0.66;
   const yOf = (c) => top + span * (1 - clamp((c - cLo) / (cHi - cLo), 0, 1));
 
-  for (const [width, colour, alpha] of [[3.2, "#0a0a0a", 1], [1.3, "#e8f5ef", 0.82]]) {
-    ctx.globalAlpha = alpha;
-    ctx.strokeStyle = colour;
-    ctx.lineWidth = Math.max(1, width * dpr);
-    ctx.lineJoin = ctx.lineCap = "round";
-    ctx.beginPath();
-    let drawing = false;
-    for (let year = y0; year <= y1; year++) {
-      const i = year - y0;
-      if (!ok[i]) { drawing = false; continue; }   // a gap, not a guess
-      const px = xOf(year) + barW / 2, py = yOf(v[i]);
-      if (drawing) ctx.lineTo(px, py);
-      else { ctx.moveTo(px, py); drawing = true; }
+  /* Both curves are the same near-white and are told apart by stroke, not by
+     colour: the strip already spends green on the histogram and the handle, and a
+     third hue in 26 px would be read as a third measurement. The axis is fixed
+     (CHROMA_AXIS), so the two are directly comparable — that is the whole point of
+     drawing them together. */
+  const strokeCurve = (nat, dashed) => {
+    const { v, ok } = F.chromaCurve(nat);
+    for (const [width, colour, alpha] of [[3.2, "#0a0a0a", 1], [1.3, "#e8f5ef", 0.82]]) {
+      ctx.globalAlpha = alpha;
+      ctx.strokeStyle = colour;
+      ctx.lineWidth = Math.max(1, width * dpr);
+      ctx.lineJoin = ctx.lineCap = "round";
+      // The dark pass stays solid: it is the gap cut in the histogram, and a
+      // dashed gap would let the bars through between the dashes.
+      ctx.setLineDash(dashed && colour !== "#0a0a0a" ? [3 * dpr, 3 * dpr] : []);
+      ctx.beginPath();
+      let drawing = false;
+      for (let year = y0; year <= y1; year++) {
+        const i = year - y0;
+        if (!ok[i]) { drawing = false; continue; }   // a gap, not a guess
+        const px = xOf(year) + barW / 2, py = yOf(v[i]);
+        if (drawing) ctx.lineTo(px, py);
+        else { ctx.moveTo(px, py); drawing = true; }
+      }
+      ctx.stroke();
     }
-    ctx.stroke();
-  }
+    ctx.setLineDash([]);
+  };
+  // Second first, so the school in the main filter is the one on top.
+  if (state.nat2 >= 0) strokeCurve(state.nat2, true);
+  strokeCurve(state.nat, false);
 
   // baseline, and the handle only when there is a year to point at
   ctx.globalAlpha = 1;
@@ -324,6 +339,7 @@ function writeURL() {
   const set = (k, v) => (v === null ? q.delete(k) : q.set(k, v));
   set("y", state.mode === "time" ? String(Math.round(state.cursor)) : null);
   set("nat", state.nat >= 0 ? String(state.nat) : null);
+  set("nat2", state.nat2 >= 0 ? String(state.nat2) : null);
   set("plane", state.chrono ? null : "1");
   set("w", state.selected >= 0 ? particleName(state.selected) : null);
   const qs = q.toString();
@@ -337,15 +353,17 @@ function writeURL() {
 function applyURL() {
   const q = new URLSearchParams(location.search);
 
-  const nat = Number(q.get("nat"));
   // Schools under 12 works have no option in the filter, so the select would
   // silently keep showing ALL while the field narrowed. Only honour what is there.
-  if (q.has("nat") && Number.isInteger(nat)
-      && el.natFilter.querySelector(`option[value="${nat}"]`)) {
-    state.nat = nat;
-    el.natFilter.value = String(nat);
-    state.tlKey = ""; state.dirty = true;
-  }
+  const school = (key) => {
+    const n = Number(q.get(key));
+    return q.has(key) && Number.isInteger(n)
+      && el.natFilter.querySelector(`option[value="${n}"]`) ? n : -1;
+  };
+  const nat = school("nat");
+  // setSchools, not the fields directly: a URL naming a second school and no
+  // first, or the same school twice, has to collapse the same way the UI does.
+  if (nat >= 0) setSchools(nat, school("nat2"));
 
   if (q.get("plane") === "1") setLayout(false);
 
@@ -382,9 +400,7 @@ function setMode(mode, { year = null, play = null } = {}) {
   el.cursorLabel.textContent = timed ? "YEAR" : "SHOWING";
   el.cursorValue.classList.toggle("is-word", !timed);
   if (!timed) el.cursorValue.textContent = "ALL YEARS";
-  el.timelineLabel.textContent = timed
-    ? "BARS WORKS · LINE CHROMA · DRAG TO SCRUB"
-    : "BARS WORKS · LINE CHROMA · CLICK FOR TIMELAPSE";
+  paintTimelineLabel();
   paintPlay();
   paintCopy();
   syncURL();
@@ -401,6 +417,31 @@ function setLayout(chrono) {
   state.chrono = chrono;
   state.dirty = true;
   paintCopy();
+  syncURL();
+}
+
+/**
+ * Which schools are on the field, as one operation because they constrain each
+ * other: ALL in the first means every school is already shown, so a second one
+ * would filter nothing, and the same school twice is one school.
+ */
+/* The strip carries two things and now sometimes three, and the label is the only
+   place that says which is which. It has to stay short: .timeline__label is
+   nowrap and takes its width off the canvas. */
+function paintTimelineLabel() {
+  el.timelineLabel.textContent = `BARS WORKS · ${state.nat2 >= 0 ? "LINE+DASH" : "LINE"} CHROMA · `
+    + (state.mode === "time" ? "DRAG TO SCRUB" : "CLICK FOR TIMELAPSE");
+}
+
+function setSchools(nat, nat2) {
+  state.nat = nat;
+  state.nat2 = nat < 0 || nat2 === nat ? -1 : nat2;
+  el.natFilter.value = String(state.nat);
+  el.natFilter2.value = String(state.nat2);
+  el.natFilter2.disabled = state.nat < 0;
+  state.tlKey = "";
+  state.dirty = true;   // particles leave the field without moving
+  paintTimelineLabel();
   syncURL();
 }
 
@@ -515,18 +556,18 @@ function bindInput() {
   el.btnPlay.addEventListener("click", () => setPlaying(!state.playing));
   el.btnLayout.addEventListener("click", () => setLayout(!state.chrono));
   el.btnReset.addEventListener("click", () => {
-    state.nat = -1;
-    el.natFilter.value = "-1";
+    setSchools(-1, -1);
     hideDetail();
     setLayout(true);
     setMode("all");
   });
   el.natFilter.addEventListener("change", () => {
-    state.nat = Number(el.natFilter.value);
-    state.tlKey = "";
-    state.dirty = true;   // particles leave the field without moving
+    setSchools(Number(el.natFilter.value), state.nat2);
     hideDetail();
-    syncURL();
+  });
+  el.natFilter2.addEventListener("change", () => {
+    setSchools(state.nat, Number(el.natFilter2.value));
+    hideDetail();
   });
   el.btnInfo.addEventListener("click", () => { el.about.hidden = false; });
   el.aboutClose.addEventListener("click", () => { el.about.hidden = true; });
@@ -673,10 +714,11 @@ function fillFilter(data) {
   const rows = [...counts.entries()]
     .filter(([, c]) => c >= 12)
     .sort((a, b) => b[1] - a[1]);
-  el.natFilter.innerHTML = `<option value="-1">ALL</option>`
-    + rows.map(([n, c]) =>
-      `<option value="${n}">${escapeHtml(data.meta.nationalities[n] || "?")} (${c})</option>`)
-      .join("");
+  const options = rows.map(([n, c]) =>
+    `<option value="${n}">${escapeHtml(data.meta.nationalities[n] || "?")} (${c})</option>`)
+    .join("");
+  el.natFilter.innerHTML = `<option value="-1">ALL</option>${options}`;
+  el.natFilter2.innerHTML = `<option value="-1">NONE</option>${options}`;
 }
 
 async function init() {

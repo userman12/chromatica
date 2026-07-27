@@ -159,7 +159,15 @@ body { display: flex; flex-direction: column; }
 .cursor__year.is-word { font-size: 13px; letter-spacing: .2em; text-shadow: none; }
 
 .filter { display: flex; align-items: center; gap: 7px; margin-left: auto; }
+.filter--vs { margin-left: 0; }
 .filter__label { font-size: 8px; letter-spacing: .16em; color: #4a504c; }
+/* Which select owns which chroma line in the strip. The two curves are the same
+   near-white — a second colour in there would compete with the histogram — so
+   they are told apart by stroke, and these are the same stroke at label size. */
+.key { display: inline-block; width: 13px; vertical-align: middle; }
+.key--a { border-top: 1px solid var(--text-bright); }
+.key--b { border-top: 1px dashed var(--text-bright); }
+select:disabled { opacity: .4; cursor: not-allowed; }
 select {
   appearance: none; background: #111; color: var(--text-bright);
   border: 1px solid var(--line); border-radius: 0;

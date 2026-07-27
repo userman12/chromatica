@@ -381,7 +381,13 @@ hex values, the clicked one marked. Thumbnails are committed to the repo (stage
 sources actually carry, so nothing is upscaled and nothing is discarded. The
 browser never requests an image from a museum. Hovering names the work and prints the hex under the cursor.
 A school filter narrows the field to one tradition's own colour rather than
-averaging it into everyone else's. Keyboard, in the timelapse: arrows ±1 year,
+averaging it into everyone else's, and a second filter beside it puts two schools
+on the field together — the comparison the data invites most is one tradition
+against another over the same centuries, and one filter could only ever answer
+half of it. Each school gets its own chroma curve in the strip, the first solid
+and the second dashed, both in the same near-white and against the same fixed
+axis so they are directly comparable. The Dutch sit at 14.3 in 1650 against the
+Italians' 15.1, and the strip says so without either curve rescaling itself. Keyboard, in the timelapse: arrows ±1 year,
 Shift ±10, PageUp/Down ±50, Home/End, space plays and pauses; Escape closes a
 panel.
 
