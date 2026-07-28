@@ -64,6 +64,9 @@ const MAT_L = 24;
 const MAT_SPREAD = 1.55;   // between core and skirt, so it reads as an aureole
 const MAT_ALPHA = 0.09;
 const MAT_GLOW = 0.5;      // the mat is softer in the blur bed than on the surface
+const RING_GAP = 6.5;      // where the selection ring rests, outside the particle
+const RING_OPEN = 13;      // where it starts, before closing in
+const RING_ALPHA = 0.9;
 
 export class Nebula {
   constructor(canvas) {
@@ -71,6 +74,15 @@ export class Nebula {
     this.ctx = canvas.getContext("2d", { alpha: false });
     this.bed = document.createElement("canvas");
     this.bedCtx = this.bed.getContext("2d");
+    /* The cloud is held as a picture rather than rebuilt for every frame that
+       needs to show it. A full render is 116,220 arcs and 64,700 fillStyle
+       writes, nearly all of them a distinct colour string, and none of that
+       depends on which particle happens to be ringed — so pointing at a row in
+       the results list used to repaint every colour in the collection in order
+       to move one ring. The cloud is redrawn on the motion threshold as before;
+       the marks are drawn over a copy of it, which costs one blit. */
+    this.cloud = document.createElement("canvas");
+    this.cloudCtx = this.cloud.getContext("2d", { alpha: false });
     this.dpr = 1;
   }
 
@@ -127,6 +139,11 @@ export class Nebula {
     this.canvas.height = Math.max(1, Math.round(cssH * this.dpr));
     this.bed.width = Math.max(1, Math.round(cssW * GLOW_SCALE));
     this.bed.height = Math.max(1, Math.round(cssH * GLOW_SCALE));
+    // Same backing store as the surface, so the blit is 1:1 device pixels and
+    // resamples nothing. Setting either dimension blanks it, so what it holds is
+    // gone rather than stale — the caller repaints on resize anyway.
+    this.cloud.width = this.canvas.width;
+    this.cloud.height = this.canvas.height;
   }
 
   /**
@@ -137,7 +154,7 @@ export class Nebula {
    *   full alpha it stops being a cloud and becomes a slab; this thins it back down
    *   without touching a single hue.
    */
-  draw(field, selected, intensity = 1) {
+  renderCloud(field, intensity) {
     const TAU = Math.PI * 2;
     const { x, y, w, rad, css, order, n } = field;
     this.liftFor(field);
@@ -177,8 +194,8 @@ export class Nebula {
       g.fill();
     }
 
-    // --- compose ---
-    const ctx = this.ctx;
+    // --- compose, into the held picture rather than onto the surface ---
+    const ctx = this.cloudCtx;
     ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
     ctx.globalAlpha = 1;
     ctx.fillStyle = BG;
@@ -226,6 +243,36 @@ export class Nebula {
     ctx.globalAlpha = 1;
     ctx.fillStyle = this.scan;
     ctx.fillRect(0, 0, this.cssW, this.cssH);
+  }
+
+  /**
+   * One frame: the held cloud, then the marks over it.
+   *
+   * Splitting these is the whole of the change. The cloud costs 116,220 arcs and
+   * depends only on where the particles are; the marks cost at most a couple of
+   * hundred strokes and change the instant you point at something. Drawing them
+   * on one clock meant every hover repainted every colour in the collection.
+   *
+   * @param {import("./field.js").Field} field
+   * @param {number} selected particle to ring, or -1
+   * @param {number} intensity Global alpha scale. The whole collection at once puts
+   *   roughly eight times more colour on the canvas than one period does, and at
+   *   full alpha it stops being a cloud and becomes a slab; this thins it back down
+   *   without touching a single hue.
+   * @param {boolean} rebuild whether the cloud itself has moved since last frame
+   * @param {number} ring 0..1, how far the selection ring is into its arrival
+   */
+  draw(field, selected, intensity = 1, rebuild = true, ring = 1) {
+    const TAU = Math.PI * 2;
+    const { x, y, w, rad } = field;
+    if (rebuild) this.renderCloud(field, intensity);
+
+    const ctx = this.ctx;
+    // 1:1, in device pixels, so the copy is a copy and not a resample.
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.globalAlpha = 1;
+    ctx.drawImage(this.cloud, 0, 0);
+    ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
 
     /* --- the marks, and the only ones allowed inside the field ---
        A search that only dims the rest answers "how many" and not "which ones":
@@ -251,12 +298,21 @@ export class Nebula {
       ctx.stroke();
     }
 
+    /* The ring closes onto the particle rather than appearing on it. It is a
+       tenth of a second of easing and it is doing one job: saying *which* of
+       twelve thousand blobs under the cursor was the one taken, which a ring
+       that is simply there from one frame to the next does not. It ends at
+       exactly the radius and opacity it always had, so the resting picture is
+       unchanged — only the arrival is new. Free now: the cloud beneath it is a
+       held picture, so an animating ring costs one blit and one stroke. */
     if (selected >= 0 && w[selected] > 0) {
-      ctx.globalAlpha = 0.9;
+      const e = 1 - (1 - ring) ** 3;   // ease-out: quick, then settling
+      ctx.globalAlpha = RING_ALPHA * e;
       ctx.strokeStyle = ACCENT;
       ctx.lineWidth = 1;
       ctx.beginPath();
-      ctx.arc(x[selected], y[selected], rad[selected] + 6.5, 0, TAU);
+      ctx.arc(x[selected], y[selected],
+        rad[selected] + RING_GAP + (RING_OPEN - RING_GAP) * (1 - e), 0, TAU);
       ctx.stroke();
     }
     ctx.globalAlpha = 1;

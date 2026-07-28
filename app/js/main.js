@@ -33,6 +33,11 @@ const INK = 2600;                 // target colours on screen, for the alpha nor
  * positions never lag the true ones by more than this, on particles whose blurred
  * radius is an order of magnitude larger. */
 const REDRAW_PX = 0.25;
+/* How long the selection ring takes to close onto the particle it names. Short
+ * enough to read as a response rather than a transition, long enough that the eye
+ * follows it to the blob instead of hunting for what changed. It only costs
+ * frames because the cloud beneath it is held: the ring is a stroke over a blit. */
+const RING_MS = 170;
 
 const $ = (id) => document.getElementById(id);
 const el = {
@@ -89,7 +94,9 @@ const state = {
   // bars on every frame cost more than the 11,728 particles did.
   ui: {}, tlKey: "",
   debt: 0,            // unpainted motion, in CSS px
-  dirty: true,        // something other than motion changed the picture
+  dirty: true,        // the cloud itself changed: filter, year, layout, search, size
+  marks: true,        // only the marks over it changed: selection, preview, ring
+  ringAt: 0,          // when the current selection landed, for its arrival
 };
 const nebula = new Nebula(el.field);
 
@@ -210,14 +217,23 @@ function frame(now) {
   // The timelapse reweights every particle on every frame, so there is always
   // something new to draw. The whole-collection view usually has nothing.
   state.debt += state.field.motion;
-  if (state.dirty || state.mode === "time" || state.debt >= REDRAW_PX) {
+  /* Two clocks, because the field has two layers that change at different rates.
+     The cloud is 116,220 arcs and only moves when the particles do, so it keeps
+     the motion threshold it always had. The marks over it are a couple of hundred
+     strokes and change the instant you point at a row or open a work — and used
+     to drag a full repaint of every colour in the collection along with them. */
+  const cloudStale = state.dirty || state.mode === "time" || state.debt >= REDRAW_PX;
+  const ring = clamp((now - state.ringAt) / RING_MS, 0, 1);
+  if (ring < 1) state.marks = true;   // keep painting while it is still arriving
+  if (cloudStale || state.marks) {
     const tDraw = perf ? performance.now() : 0;
     // A row pointed at in the results list rings its blob without selecting it:
     // running the eye down the list should light up the field, not open panels.
-    nebula.draw(state.field, state.preview >= 0 ? state.preview : state.selected, intensity);
+    nebula.draw(state.field, state.preview >= 0 ? state.preview : state.selected,
+      intensity, cloudStale, ring);
     if (perf) perf.draw(performance.now() - tDraw);
-    state.debt = 0;
-    state.dirty = false;
+    state.marks = false;
+    if (cloudStale) { state.debt = 0; state.dirty = false; }
   }
   paintReadout();
   drawTimeline();
@@ -963,12 +979,12 @@ function bindInput() {
     const next = row ? state.matchIds[+row.dataset.k] : -1;
     if (next === state.preview) return;
     state.preview = next ?? -1;
-    state.dirty = true;
+    state.marks = true;   // a ring moves; the cloud under it has not changed
   });
   el.searchList.addEventListener("pointerleave", () => {
     if (state.preview < 0) return;
     state.preview = -1;
-    state.dirty = true;
+    state.marks = true;
   });
   el.searchList.addEventListener("click", (event) => {
     if (event.target.closest(".findlist__x")) { clearNear(); return; }
@@ -1064,8 +1080,11 @@ function showDetail(particle) {
   const F = state.field;
   const p = state.data.paintings[F.owner[particle]];
   const thisHex = F.css[particle];
+  // Only when the selection actually moves, or stepping with Enter would restart
+  // the arrival on every frame that re-opened the same work.
+  if (state.selected !== particle) state.ringAt = performance.now();
   state.selected = particle;
-  state.dirty = true;   // the ring is drawn on the canvas
+  state.marks = true;   // the ring is over the cloud, not in it
   // The timelapse stops while you are looking at a work: the particle you clicked
   // would otherwise fade out from under the panel.
   setPlaying(false);
@@ -1104,7 +1123,7 @@ function hideDetail() {
   state.selected = -1;
   state.matchAt = -1;   // no ring standing, so the count goes back to the total
   markMatchRow();
-  state.dirty = true;
+  state.marks = true;
   syncURL();
 }
 
