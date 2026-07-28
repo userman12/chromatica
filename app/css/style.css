@@ -41,6 +41,22 @@ html, body {
 
 body { display: flex; flex-direction: column; }
 
+/* This is an instrument, not a document, and until now the browser did not know
+   that. The canvas sits between two text elements — the axis line above it and
+   the hint below — so pressing on the field and moving even one pixel begins a
+   native text selection whose range runs from one of them, *through* the canvas,
+   toward the other. Chromium tints the whole element box of everything inside a
+   selection range, so the field came up under a pale film on every click. A click
+   is always a small drag, which is why it was every click; SCRUB_SLOP treats
+   movement under 4 px as a tap, so the app called it a click while the browser
+   was calling it a selection.
+   Reading matter is exempted rather than the whole page being locked down: the
+   detail sheet carries titles, catalogue ids and hex values, and those exist to
+   be copied. Inputs are named explicitly because `user-select` on an ancestor
+   reaches into them in some engines. */
+body { -webkit-user-select: none; user-select: none; }
+.panel, input { -webkit-user-select: text; user-select: text; }
+
 /* ---------- boot sequence ---------- */
 .boot {
   position: fixed; inset: 0; z-index: 90;
@@ -113,21 +129,14 @@ body { display: flex; flex-direction: column; }
   position: relative; flex: 1 1 auto; min-height: 0;
   overflow: hidden; cursor: crosshair; touch-action: none;
 }
-/* `will-change` here is not a performance hint, it is a correctness one, and it
-   is aimed at one reported symptom: in Chromium — reported on Arc — clicking a
-   particle washed the field with a pale grey film for an instant before it
-   snapped back.
-   The cause is above this element rather than in it. `.panel` animates `opacity`
-   *and* `transform`, which makes Chromium promote it to its own compositing layer
-   for the 140 ms the animation runs and then throw that layer away again. A layer
-   appearing and disappearing over the canvas forces the compositor to re-decide
-   how the canvas underneath is rasterised, and an opaque canvas caught mid-
-   decision is exactly where that engine shows a grey frame. Pinning the canvas to
-   a layer of its own means the answer never changes, so there is no re-decision to
-   catch it out.
-   Cheap: this canvas is repainted every frame anyway, so it wants its own layer
-   regardless. It creates a stacking context, which changes nothing — the chip and
-   the two axis labels are siblings painted after it, not descendants. */
+/* Its own compositing layer, because it is repainted every frame and panels
+   animate in and out above it; without this the compositor re-decides how to
+   rasterise it whenever a layer appears over it. It creates a stacking context,
+   which changes nothing here — the chip and the two axis labels are siblings
+   painted after it, not descendants.
+   Added while chasing the pale film described under `user-select` above, on the
+   theory that it was compositor churn. It was not — the film was text selection —
+   so this fixes nothing that was reported. Kept on its own merits only. */
 #field { display: block; width: 100%; height: 100%; will-change: transform; }
 .stage.is-scrubbing { cursor: ew-resize; }
 
