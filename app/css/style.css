@@ -113,7 +113,22 @@ body { display: flex; flex-direction: column; }
   position: relative; flex: 1 1 auto; min-height: 0;
   overflow: hidden; cursor: crosshair; touch-action: none;
 }
-#field { display: block; width: 100%; height: 100%; }
+/* `will-change` here is not a performance hint, it is a correctness one, and it
+   is aimed at one reported symptom: in Chromium — reported on Arc — clicking a
+   particle washed the field with a pale grey film for an instant before it
+   snapped back.
+   The cause is above this element rather than in it. `.panel` animates `opacity`
+   *and* `transform`, which makes Chromium promote it to its own compositing layer
+   for the 140 ms the animation runs and then throw that layer away again. A layer
+   appearing and disappearing over the canvas forces the compositor to re-decide
+   how the canvas underneath is rasterised, and an opaque canvas caught mid-
+   decision is exactly where that engine shows a grey frame. Pinning the canvas to
+   a layer of its own means the answer never changes, so there is no re-decision to
+   catch it out.
+   Cheap: this canvas is repainted every frame anyway, so it wants its own layer
+   regardless. It creates a stacking context, which changes nothing — the chip and
+   the two axis labels are siblings painted after it, not descendants. */
+#field { display: block; width: 100%; height: 100%; will-change: transform; }
 .stage.is-scrubbing { cursor: ew-resize; }
 
 /* Says what the surface is, then gets out of the way. */
