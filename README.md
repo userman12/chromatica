@@ -468,12 +468,43 @@ Three things had to be fixed to get there, and two of them were not the particle
   11,728 particles of the earlier build did.
 - **Canvas 2D is retained, so a frame in which nothing moved needs no draw call.**
   Once the whole collection has settled, the only motion left is the idle
-  breathing — about 0.03 px per frame. `step()` reports the largest distance any
-  particle travelled, and the field is redrawn when the unpainted total passes
-  0.25 px — measured at 14% of frames in Safari and 22% in Firefox on a settled
-  whole span, so most frames cost nothing at all — for a picture that is identical
-  to within a quarter of a pixel on particles several pixels wide. The timelapse
-  reweights every particle on every frame, so there it always redraws.
+  breathing — about 0.032 px per frame. `step()` reports the largest distance any
+  particle travelled, and the field is repainted only when that has added up to
+  something worth painting. The timelapse reweights every particle on every frame,
+  so there it always redraws.
+
+  How much is "worth painting" was a single 0.25 px threshold, and it caused a
+  visible fault. The reasoning behind it was about *position* — a quarter pixel of
+  lag on blobs several pixels wide is nothing — and it was silent about *time*. At
+  0.032 px a frame, 0.25 px arrives every eighth frame: the picture was updating at
+  **7.5 Hz**, and all 32,350 particles stepped at the same instant, because the
+  breathing is one shared oscillator rather than per-particle noise. A coherent
+  update at 7.5 Hz is squarely in the band the eye is most sensitive to flicker in.
+  The glow bed makes it worse still: it is a quarter-resolution buffer scaled back
+  up, so a sub-pixel step does not translate it, it re-rolls the interpolation
+  across every pixel it covers — sub-pixel motion is *amplified* into a luminance
+  change over the whole smooth layer. The atmosphere pulsed light and dark eight
+  times a second.
+
+  The threshold cannot simply be lowered, because the right value is not the same
+  on every machine: a full-field draw is 1–2 ms in Safari and 34–36 ms in Firefox,
+  and the cadence that keeps Safari smooth would put Firefox under 30 fps. So the
+  two questions are asked separately — a **floor** (0.02 px) for whether anything
+  moved enough to be worth painting, and a **budget** for how often this engine can
+  afford to paint, taken from an EMA of what its own draws actually cost rather
+  than from any assumption about which browser it is. Simulated against the real
+  field at both measured costs:
+
+  | | before | after |
+  |---|---|---|
+  | Safari, draw 1.5 ms | 7.5 Hz, 0.161 px step, 0.19 ms/frame | **60 Hz, 0.020 px step**, 1.50 ms/frame |
+  | Firefox, draw 35 ms | 7.5 Hz, 0.161 px step, 4.94 ms/frame | 6.7 Hz, 0.181 px step, **3.89 ms/frame** |
+
+  So the flicker is gone wherever the machine can afford to paint at frame rate,
+  and where it cannot the cadence is unchanged and the drawing load is slightly
+  lower — it self-limits instead of stuttering. On an engine as slow as Firefox at
+  this particle count the pulse is still there; that is a draw-cost problem, and
+  the honest fix for it is a cheaper draw, not a different threshold.
 - A global alpha scale, as above, so the eightfold denser default is still a cloud.
 - **`step()` recomputes only what changed.** Two things in it did not depend on
   the clock and were being redone sixty times a second anyway. Which particles are
