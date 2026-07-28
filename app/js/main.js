@@ -927,8 +927,7 @@ function bindInput() {
   /* --- the field: a tap opens a painting; in the timelapse a drag also scrubs --- */
   let drag = null;
   el.stage.addEventListener("pointerdown", (event) => {
-    el.stage.setPointerCapture(event.pointerId);
-    drag = { x: event.clientX, from: state.cursor, moved: 0 };
+    drag = { id: event.pointerId, x: event.clientX, from: state.cursor, moved: 0, held: false };
   });
   el.stage.addEventListener("pointermove", (event) => {
     const rect = el.stage.getBoundingClientRect();
@@ -937,6 +936,18 @@ function bindInput() {
     if (drag) {
       const dx = event.clientX - drag.x;
       drag.moved = Math.max(drag.moved, Math.abs(dx));
+      /* Capture is taken when a drag actually starts, not on every press.
+         It is here for one reason: a scrub has to keep receiving the pointer
+         after it leaves the stage. A click never needs that, and taking it on
+         every pointerdown made every click retarget the whole pointer event
+         stream to `.stage` — the canvas's parent — which invalidates hit-testing
+         and paint properties across that subtree. Reported on Arc as a pale grey
+         film over the field on every click; the cadence is the tell, since this
+         was the one thing the app did on every press and nothing else. */
+      if (drag.moved >= SCRUB_SLOP && !drag.held) {
+        drag.held = true;
+        el.stage.setPointerCapture(drag.id);
+      }
       if (drag.moved >= SCRUB_SLOP && state.mode === "time") {
         el.stage.classList.add("is-scrubbing");
         setPlaying(false);

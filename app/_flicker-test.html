@@ -1,0 +1,141 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="dark">
+<title>CHROMATICA — flicker bisection</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #0a0a0a; color: #6f7671;
+    font-family: ui-monospace, Menlo, monospace; font-size: 11px; }
+  body { padding: 14px 16px 40px; box-sizing: border-box; overflow-y: auto; }
+  h1 { font-size: 12px; letter-spacing: .2em; color: #c8d2cb; margin: 0 0 4px; }
+  p.lede { margin: 0 0 16px; line-height: 1.6; max-width: 78ch; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 14px; }
+  .case { border: 1px solid #1c1c1c; padding: 9px 10px 10px; position: relative; }
+  .case h2 { font-size: 9px; letter-spacing: .16em; color: #00ff9d; margin: 0 0 3px; font-weight: 400; }
+  .case p { margin: 0 0 8px; line-height: 1.5; color: #575e59; min-height: 3.1em; }
+  .stage { position: relative; height: 150px; overflow: hidden; cursor: crosshair; }
+  canvas { display: block; width: 100%; height: 100%; }
+  .above, .below { position: absolute; left: 0; right: 0; margin: 0; text-align: center;
+    font-size: 8px; letter-spacing: .18em; color: #59615c; pointer-events: none; }
+  .above { top: 4px; } .below { bottom: 4px; }
+  /* case 5 only */
+  #s5 { -webkit-user-select: none; user-select: none; }
+  /* case 6 only */
+  #c6 { will-change: transform; }
+  .panel { position: absolute; right: 6px; bottom: 6px; width: 130px; height: 54px;
+    background: #0d0d0d; border: 1px solid #262626; box-shadow: 0 20px 60px #000000e6;
+    z-index: 5; animation: panelIn .14s steps(3, end); }
+  @keyframes panelIn { from { opacity: 0; transform: translateY(5px); } }
+  .hint { color: #4a504c; margin-top: 18px; line-height: 1.7; max-width: 78ch; }
+  b { color: #c8d2cb; font-weight: 500; }
+</style>
+</head>
+<body>
+
+<h1>FLICKER BISECTION</h1>
+<p class="lede">Each box below is the same field of blobs, drawn the same way. They differ by
+<b>one thing each</b>. Click inside every box a few times and note which ones show the pale grey
+film. That names the cause without guessing.</p>
+
+<div class="grid" id="grid"></div>
+
+<p class="hint">Every box repaints on click, so a box that never flashes rules out the drawing
+itself. If <b>only 2</b> flashes it is pointer capture. If <b>only 3</b>, text selection. If
+<b>only 4</b>, the panel's compositing layer. If <b>1</b> flashes too, it is the canvas or the
+browser and nothing the page does.</p>
+
+<script>
+const CASES = [
+  { id: 1, title: "1 · BARE", note: "Canvas and a click listener. Nothing else. The control." },
+  { id: 2, title: "2 · POINTER CAPTURE", note: "setPointerCapture on every pointerdown, as the app used to do." },
+  { id: 3, title: "3 · TEXT SIBLINGS", note: "Text above and below the canvas, selection left enabled." },
+  { id: 4, title: "4 · ANIMATED PANEL", note: "A panel with an opacity+transform animation appears on click." },
+  { id: 5, title: "5 · TEXT, SELECTION OFF", note: "Same as 3 but user-select:none — the fix already shipped." },
+  { id: 6, title: "6 · WILL-CHANGE", note: "Canvas pinned to its own compositing layer." },
+];
+
+const grid = document.getElementById("grid");
+grid.innerHTML = CASES.map((c) => `
+  <div class="case">
+    <h2>${c.title}</h2>
+    <p>${c.note}</p>
+    <div class="stage" id="s${c.id}">
+      ${c.id === 3 || c.id === 5 ? '<p class="above">HORIZONTAL · YEAR</p>' : ""}
+      <canvas id="c${c.id}"></canvas>
+      ${c.id === 3 || c.id === 5 ? '<p class="below">EVERY PARTICLE IS ONE MEASURED COLOUR</p>' : ""}
+    </div>
+  </div>`).join("");
+
+/* One deterministic cloud, drawn into each canvas the way nebula.js draws:
+   a low-resolution bed scaled up, then a crisp pass, then a scanline pattern. */
+const N = 2200;
+const hash = (x) => { let h = (x * 2654435761) >>> 0; h ^= h >>> 15;
+  h = (h * 2246822519) >>> 0; h ^= h >>> 13; return (h >>> 0) / 4294967296; };
+const pts = Array.from({ length: N }, (_, i) => ({
+  x: hash(i * 3 + 1), y: hash(i * 3 + 2),
+  r: 1 + hash(i * 3 + 3) * 3,
+  c: `hsl(${30 + hash(i * 7) * 40} ${20 + hash(i * 11) * 45}% ${8 + hash(i * 13) * 42}%)`,
+}));
+
+let scan = null;
+function draw(cv) {
+  const dpr = Math.min(devicePixelRatio || 1, 2);
+  const w = cv.clientWidth, h = cv.clientHeight;
+  if (!w || !h) return;
+  cv.width = Math.round(w * dpr); cv.height = Math.round(h * dpr);
+  const ctx = cv.getContext("2d", { alpha: false });
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+  const S = 0.34;
+  const bed = document.createElement("canvas");
+  bed.width = Math.max(1, Math.round(w * S)); bed.height = Math.max(1, Math.round(h * S));
+  const g = bed.getContext("2d");
+  for (const p of pts) {
+    g.fillStyle = p.c; g.globalAlpha = 0.34 * 0.3;
+    g.beginPath(); g.arc(p.x * w * S, p.y * h * S, Math.max(0.7, p.r * S * 3.1), 0, 7); g.fill();
+  }
+  ctx.fillStyle = "#0a0a0a"; ctx.fillRect(0, 0, w, h);
+  ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = "high";
+  ctx.drawImage(bed, 0, 0, w, h);
+  for (const p of pts) {
+    ctx.fillStyle = p.c;
+    ctx.globalAlpha = 0.11 * 0.3;
+    ctx.beginPath(); ctx.arc(p.x * w, p.y * h, p.r * 2, 0, 7); ctx.fill();
+    ctx.globalAlpha = 0.52 * 0.3;
+    ctx.beginPath(); ctx.arc(p.x * w, p.y * h, p.r * 0.9, 0, 7); ctx.fill();
+  }
+  if (!scan) {
+    const t = document.createElement("canvas");
+    t.width = 1; t.height = 3;
+    const c = t.getContext("2d"); c.fillStyle = "#ffffff09"; c.fillRect(0, 0, 1, 1);
+    scan = { tile: t, pat: ctx.createPattern(t, "repeat") };
+  }
+  ctx.globalAlpha = 1;
+  ctx.fillStyle = ctx.createPattern(scan.tile, "repeat");
+  ctx.fillRect(0, 0, w, h);
+}
+
+for (const c of CASES) {
+  const stage = document.getElementById(`s${c.id}`);
+  const cv = document.getElementById(`c${c.id}`);
+  draw(cv);
+  stage.addEventListener("pointerdown", (e) => {
+    if (c.id === 2) stage.setPointerCapture(e.pointerId);   // the only difference
+  });
+  stage.addEventListener("pointerup", () => {
+    if (c.id === 4) {
+      stage.querySelector(".panel")?.remove();
+      const p = document.createElement("div");
+      p.className = "panel";
+      stage.appendChild(p);
+      setTimeout(() => p.remove(), 900);
+    }
+    draw(cv);   // every case repaints on click, so drawing is never the variable
+  });
+}
+addEventListener("resize", () => { for (const c of CASES) draw(document.getElementById(`c${c.id}`)); });
+</script>
+</body>
+</html>
