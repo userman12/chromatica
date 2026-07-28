@@ -27,30 +27,12 @@ const SCRUB_SLOP = 4;             // px of movement still counted as a click
 const STAGE_GAIN = 1.35;          // years per px when dragging on the field itself
 const INK = 2600;                 // target colours on screen, for the alpha normaliser
 /* Canvas 2D is retained: what was drawn stays on screen until something draws over
- * it, so a frame in which nothing moved needs no draw call at all.
- *
- * This used to be a single distance threshold — 0.25 px of accumulated motion —
- * on the reasoning that the displayed positions never lag the true ones by more
- * than a quarter pixel, on blobs an order of magnitude wider. That reasoning is
- * sound about *position* and was wrong about *time*. The settled field breathes at
- * 0.032 px a frame, so 0.25 px arrives every eighth frame: the picture was
- * updating at 7.5 Hz, and every one of 32,350 particles stepped at the same
- * instant because they share one oscillator. A coherent update at 7.5 Hz sits in
- * the band the eye is most sensitive to flicker in, and the glow bed makes it
- * worse — it is a quarter-resolution buffer scaled back up, so a sub-pixel step
- * does not move it, it re-rolls the interpolation across every pixel it covers.
- * The atmosphere pulsed light and dark eight times a second.
- *
- * The distance alone cannot be retuned out of this, because the right answer is
- * not the same on every machine: a full-field draw measures 1–2 ms in Safari and
- * 34–36 ms in Firefox, and the threshold that keeps Safari smooth would put
- * Firefox under 30 fps. So the two questions are asked separately. The floor asks
- * whether anything moved enough to be worth painting at all. The budget asks how
- * often this engine can afford to paint, from what its own draws actually cost —
- * measured, not assumed, so a fast engine repaints every frame and a slow one
- * falls back to roughly the old cadence rather than to a stutter. */
-const REDRAW_FLOOR_PX = 0.02;   // below this nothing has visibly moved
-const DRAW_BUDGET_MS = 4;       // of a 16.7 ms frame, how much may go to drawing
+ * it. So a frame in which nothing moved more than this needs no draw call at all —
+ * and the settled field, breathing at ~0.03 px per frame, is almost every frame.
+ * The number is a visible-motion threshold, not a frame budget: the displayed
+ * positions never lag the true ones by more than this, on particles whose blurred
+ * radius is an order of magnitude larger. */
+const REDRAW_PX = 0.25;
 
 const $ = (id) => document.getElementById(id);
 const el = {
@@ -107,8 +89,6 @@ const state = {
   // bars on every frame cost more than the 11,728 particles did.
   ui: {}, tlKey: "",
   debt: 0,            // unpainted motion, in CSS px
-  sinceDraw: 0,       // frames since the surface was last painted
-  drawMs: 0,          // what a full-field draw costs here, smoothed
   dirty: true,        // something other than motion changed the picture
 };
 const nebula = new Nebula(el.field);
@@ -230,24 +210,13 @@ function frame(now) {
   // The timelapse reweights every particle on every frame, so there is always
   // something new to draw. The whole-collection view usually has nothing.
   state.debt += state.field.motion;
-  state.sinceDraw++;
-  // One frame on an engine that can afford it; on a slow one, as many frames as
-  // it takes for the average cost to come back under budget. Measured from this
-  // machine's own draws, so nothing here is a guess about which browser it is.
-  const minFrames = Math.max(1, Math.ceil(state.drawMs / DRAW_BUDGET_MS));
-  if (state.dirty || state.mode === "time"
-      || (state.debt >= REDRAW_FLOOR_PX && state.sinceDraw >= minFrames)) {
-    const tDraw = performance.now();
+  if (state.dirty || state.mode === "time" || state.debt >= REDRAW_PX) {
+    const tDraw = perf ? performance.now() : 0;
     // A row pointed at in the results list rings its blob without selecting it:
     // running the eye down the list should light up the field, not open panels.
     nebula.draw(state.field, state.preview >= 0 ? state.preview : state.selected, intensity);
-    const cost = performance.now() - tDraw;
-    // Smoothed, so one slow frame — a GC pause, a background tab waking — cannot
-    // knock the cadence down and then leave it there.
-    state.drawMs = state.drawMs ? state.drawMs * 0.9 + cost * 0.1 : cost;
-    if (perf) perf.draw(cost);
+    if (perf) perf.draw(performance.now() - tDraw);
     state.debt = 0;
-    state.sinceDraw = 0;
     state.dirty = false;
   }
   paintReadout();
@@ -927,7 +896,8 @@ function bindInput() {
   /* --- the field: a tap opens a painting; in the timelapse a drag also scrubs --- */
   let drag = null;
   el.stage.addEventListener("pointerdown", (event) => {
-    drag = { id: event.pointerId, x: event.clientX, from: state.cursor, moved: 0, held: false };
+    el.stage.setPointerCapture(event.pointerId);
+    drag = { x: event.clientX, from: state.cursor, moved: 0 };
   });
   el.stage.addEventListener("pointermove", (event) => {
     const rect = el.stage.getBoundingClientRect();
@@ -936,18 +906,6 @@ function bindInput() {
     if (drag) {
       const dx = event.clientX - drag.x;
       drag.moved = Math.max(drag.moved, Math.abs(dx));
-      /* Capture is taken when a drag actually starts, not on every press.
-         It is here for one reason: a scrub has to keep receiving the pointer
-         after it leaves the stage. A click never needs that, and taking it on
-         every pointerdown made every click retarget the whole pointer event
-         stream to `.stage` — the canvas's parent — which invalidates hit-testing
-         and paint properties across that subtree. Reported on Arc as a pale grey
-         film over the field on every click; the cadence is the tell, since this
-         was the one thing the app did on every press and nothing else. */
-      if (drag.moved >= SCRUB_SLOP && !drag.held) {
-        drag.held = true;
-        el.stage.setPointerCapture(drag.id);
-      }
       if (drag.moved >= SCRUB_SLOP && state.mode === "time") {
         el.stage.classList.add("is-scrubbing");
         setPlaying(false);

@@ -84,15 +84,6 @@ export class Nebula {
     const c = tile.getContext("2d");
     c.fillStyle = "#ffffff09";
     c.fillRect(0, 0, 1, 1);
-    // The tile is held, not left to fall out of scope. A CanvasPattern is
-    // specified to snapshot its source, so this should not matter — but the
-    // failure it guards against is not a subtle one. Assigning an unusable value
-    // to `fillStyle` is *silently ignored*, which would leave whatever colour was
-    // set last still in force, and the pass that follows floods the entire canvas
-    // with it. Draw order is darkest-first, so the colour still standing at that
-    // point is the lightest particle in the field: the whole surface would wash
-    // pale for one frame and come back on the next.
-    this.scanTile = tile;
     this.scan = this.ctx.createPattern(tile, "repeat");
   }
 
@@ -233,11 +224,6 @@ export class Nebula {
     // --- panel texture ---
     if (!this.scan) this.buildScanlines();
     ctx.globalAlpha = 1;
-    // Cleared to a no-op colour before the pattern goes in, so that if the
-    // assignment below is ever rejected the fill that follows paints nothing
-    // instead of flooding the field with the last particle's colour. The texture
-    // is worth having; it is not worth a full-canvas wash to get it.
-    ctx.fillStyle = "transparent";
     ctx.fillStyle = this.scan;
     ctx.fillRect(0, 0, this.cssW, this.cssH);
 
