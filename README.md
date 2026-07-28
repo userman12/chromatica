@@ -426,9 +426,16 @@ cloud rather than a slab. It touches alpha only; no hue is altered.
 
 ### Rendering
 
-**Canvas 2D**, two passes, flat typed arrays, no per-frame allocation. Measured
-at 32,438 particles, dpr 2, on an M-series Mac, driving the real page through the
-timelapse and back:
+**Canvas 2D**, flat typed arrays, no per-frame allocation. The cloud is built in
+two passes — a low-resolution glow bed scaled up, then the crisp pass — into a
+canvas that is *held*, and each frame blits that and strokes the marks over it.
+Why it is split that way is below.
+
+The table is the browser measurement, taken **before** the cloud was split out, at
+32,438 particles and dpr 2 on an M-series Mac, driving the real page through the
+timelapse and back. It is left as measured rather than restated, because it is
+what motivated the split and the figures after it are simulated rather than
+observed in a browser:
 
 | | Safari 26 · 2880×1266 | Firefox 140 · 2682×970 |
 |---|---|---|
@@ -455,8 +462,10 @@ with one, 0.647 ms without.
 **Append `?perf=1`** to re-check any of this rather than inherit it. An overlay
 appears carrying frame interval, `step()` and draw cost as p50 and p95 over a
 rolling three seconds, and the share of frames that reached a draw at all — that
-last one is the number that says whether the retained-canvas optimisation below
-is still working. Percentiles rather than means, because a 16.7 ms mean is
+last one is the number that says whether the retained canvas and the cloud/marks
+split below are still earning their keep. Note that DRAW now covers both kinds of
+frame, so its p50 is a blit and its p95 is a cloud rebuild; the gap between them
+is the split working. Percentiles rather than means, because a 16.7 ms mean is
 equally consistent with a steady 60 fps and with alternating 8 and 25 ms frames,
 and only one of those is watchable. Without the flag the module exports `null`
 and no timing call is made.
@@ -474,6 +483,35 @@ Three things had to be fixed to get there, and two of them were not the particle
   whole span, so most frames cost nothing at all — for a picture that is identical
   to within a quarter of a pixel on particles several pixels wide. The timelapse
   reweights every particle on every frame, so there it always redraws.
+- **The cloud and the marks over it run on separate clocks**, which is the single
+  largest thing here. A full cloud render is **113,560 arcs and 64,619 `fillStyle`
+  writes**, nearly every one of them a distinct colour string, and it depends only
+  on where the particles are. The marks — the thin rings on search results, the
+  ring on the selected work — are at most a couple of hundred strokes and change
+  the instant you point at something. Sharing one clock meant that running the eye
+  down the results list repainted every colour in the collection, once per row, to
+  move one ring.
+
+  So the cloud is rendered into a held canvas on the motion threshold above, and a
+  frame that only needs new marks blits it 1:1 in device pixels and strokes over
+  it. Measured against the real field with a counting canvas stub: a rebuild is
+  113,560 arcs, a marks-only frame is **1 arc, 1 stroke, 1 `drawImage` and no
+  colour parsing at all**. What that is worth, simulated over the real field at
+  the draw costs the table above measured, while running the eye down a list of
+  results:
+
+  | | before | after |
+  |---|---|---|
+  | Safari, 60 Hz | 1.60 ms/frame | **0.49** |
+  | Firefox, 60 Hz | 35.00 ms/frame | **5.90** |
+  | Safari, 120 Hz | 1.60 ms/frame | **0.32** |
+  | Firefox, 120 Hz | 35.00 ms/frame | **2.03** |
+
+  Firefox goes from one repaint costing more than an entire 60 fps frame to
+  fitting inside a 120 fps one. The idle case moves by 0.03 ms/frame, which is the
+  point: an earlier attempt at smoothness traded the idle optimisation away and
+  made the app slower, and the split is deliberately not a second version of that.
+  It costs one full-size backing store, ~50 MB at dpr 2 on a large display.
 - A global alpha scale, as above, so the eightfold denser default is still a cloud.
 - **`step()` recomputes only what changed.** Two things in it did not depend on
   the clock and were being redone sixty times a second anyway. Which particles are
@@ -527,6 +565,34 @@ hex values, the clicked one marked. Thumbnails are committed to the repo (stage
 05) and land at 596–640 px on the long edge — the target is set above what the
 sources actually carry, so nothing is upscaled and nothing is discarded. The
 browser never requests an image from a museum. Hovering names the work and prints the hex under the cursor.
+
+**The sheet is filled only once its picture can be painted with it.** Setting
+`img.src` beside the text meant the words changed on the frame you clicked and the
+painting arrived whenever its file did, so choosing a second work showed you its
+title over the previous one's picture. Fast, and it still read as lag, because two
+halves of one description had come apart. Now the click's own answer is immediate
+— the ring closes on the particle, the timelapse stops, the URL updates — and only
+the sheet waits, until the thumbnail has decoded; then everything lands in one
+write. A file already in cache skips the wait entirely and fills in the same tick,
+since an async function runs synchronously until its first `await` and there is no
+`await` to reach. Three things had to come with it: a token, so clicking faster
+than the network shows the work asked for last rather than the file that arrived
+last (`hideDetail` bumps it too, or a slow picture reopens a panel you have
+already clicked away); a 140 ms cap, so a cold file shows its words rather than
+looking like the click missed; and the intrinsic size written with the source,
+because `height: auto` alone lays the figure out at nothing, paints, then
+relayouts once the file reports its height — which is what made the sheet jump.
+Thumbnails already looked at are held decoded, capped at 48, and pointing at a row
+in the results list fetches its painting then, so the click has nothing left to
+wait for.
+
+**The selection ring closes onto its particle** over 170 ms rather than appearing
+on it, ending at exactly the radius and opacity it always had — the resting
+picture is unchanged and only the arrival is new. It says *which* of twelve
+thousand blobs under the cursor was the one taken, which a ring that is simply
+there from one frame to the next does not. It is affordable only because of the
+split above: the cloud beneath it is a held picture, so an animating ring costs
+one blit and one stroke instead of 113,560 arcs a frame.
 A school filter narrows the field to one tradition's own colour rather than
 averaging it into everyone else's. A second filter that put two schools on the
 field together, each with its own chroma curve in the strip, was built and then
