@@ -980,6 +980,13 @@ function bindInput() {
     if (next === state.preview) return;
     state.preview = next ?? -1;
     state.marks = true;   // a ring moves; the cloud under it has not changed
+    // Pointing at a row is already a decision most of the way made, so its
+    // painting is fetched now. By the time the click lands the panel has nothing
+    // to wait for. One file, only on rows actually pointed at.
+    if (state.preview >= 0) {
+      const p = state.data.paintings[state.field.owner[state.preview]];
+      preload(`thumbs/${state.data.meta.sources[p.c].key}/${p.i}.webp`);
+    }
   });
   el.searchList.addEventListener("pointerleave", () => {
     if (state.preview < 0) return;
@@ -1076,10 +1083,42 @@ function hideChip() {
 }
 
 /* ---------- the second layer ---------- */
+
+/* Thumbnails already fetched, held decoded so a second look is instant. Capped:
+   7,094 of them would be a real amount of memory, and the ones worth keeping are
+   the ones just looked at. */
+const IMG_CACHE = 48;
+const imgs = new Map();
+
+function preload(src) {
+  let img = imgs.get(src);
+  if (img) return img;
+  img = new Image();
+  img.decoding = "async";
+  img.src = src;
+  imgs.set(src, img);
+  if (imgs.size > IMG_CACHE) imgs.delete(imgs.keys().next().value);
+  return img;
+}
+
+/* How long the panel will hold for a picture before showing the words without
+   it. Long enough to cover a decode and a warm fetch, short enough that a cold
+   one does not read as the click having missed. */
+const IMG_HOLD = 140;
+let detailToken = 0;
+
+/**
+ * Open a work. What the eye is waiting on happens now; the panel follows when it
+ * can be right in one go.
+ *
+ * The ring, the timelapse stopping and the URL are immediate, because those are
+ * the answer to the click. The sheet is filled only once its picture is ready to
+ * paint with it: setting `img.src` beside the text meant the words changed on the
+ * frame you clicked and the painting arrived whenever the file did, so selecting
+ * a second work showed you its title over the previous one's picture. Fast, and
+ * still read as lag, because two things that describe one painting moved apart.
+ */
 function showDetail(particle) {
-  const F = state.field;
-  const p = state.data.paintings[F.owner[particle]];
-  const thisHex = F.css[particle];
   // Only when the selection actually moves, or stepping with Enter would restart
   // the arrival on every frame that re-opened the same work.
   if (state.selected !== particle) state.ringAt = performance.now();
@@ -1088,12 +1127,42 @@ function showDetail(particle) {
   // The timelapse stops while you are looking at a work: the particle you clicked
   // would otherwise fade out from under the panel.
   setPlaying(false);
+  paintNear();
+  syncURL();
+  fillDetail(particle);
+}
 
+async function fillDetail(particle) {
+  const F = state.field;
+  const p = state.data.paintings[F.owner[particle]];
+  const thisHex = F.css[particle];
   // `c` indexes meta.sources: the thumbnail path, the outbound link and the
   // credit line all come from there, because four catalogues number their own
   // objects independently and an id alone no longer identifies anything.
   const src = state.data.meta.sources[p.c];
-  el.detailImg.src = `thumbs/${src.key}/${p.i}.webp`;
+  const href = `thumbs/${src.key}/${p.i}.webp`;
+
+  const token = ++detailToken;
+  const img = preload(href);
+  if (!img.complete) {
+    await Promise.race([
+      img.decode().catch(() => {}),   // a broken file still gets its sheet
+      new Promise((done) => setTimeout(done, IMG_HOLD)),
+    ]);
+    // Clicking faster than the network: whichever work was asked for last is the
+    // one that gets the panel, not whichever file happened to arrive last.
+    if (token !== detailToken) return;
+  }
+
+  // The intrinsic size goes on with the source. `height: auto` on its own makes
+  // the browser lay the figure out at nothing, paint, then relayout once the file
+  // says how tall it is — so the sheet under it jumped. Given the ratio up front
+  // there is one layout and no jump. Known here because it has just been decoded.
+  if (img.naturalWidth) {
+    el.detailImg.width = img.naturalWidth;
+    el.detailImg.height = img.naturalHeight;
+  }
+  el.detailImg.src = href;
   el.detailImg.alt = p.t || "Untitled";
   el.detailTitle.textContent = p.t || "Untitled";
   el.detailArtist.textContent = p.a || "Unattributed";
@@ -1113,12 +1182,15 @@ function showDetail(particle) {
     + `<code>${h.toUpperCase()}</code></li>`).join("");
   el.detailLink.href = src.url.replace("{}", encodeURIComponent(p.i));
   el.detailLink.textContent = `OPEN AT ${src.short} ↗`;
-  paintNear();
   el.detail.hidden = false;
-  syncURL();
 }
 
 function hideDetail() {
+  // Invalidates any fill still waiting on a picture. The token guards against a
+  // newer selection landing first; closing is the other way the answer can go
+  // stale, and without this a slow file would reopen the panel after you had
+  // already clicked it away.
+  detailToken++;
   el.detail.hidden = true;
   state.selected = -1;
   state.matchAt = -1;   // no ring standing, so the count goes back to the total

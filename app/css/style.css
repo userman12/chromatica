@@ -308,9 +308,14 @@ button[aria-pressed="true"] {
   width: 330px; max-width: calc(100vw - 28px);
   background: var(--bg-panel); border: 1px solid #262626;
   box-shadow: 0 20px 60px #000000e6;
-  animation: panelIn .14s steps(3, end);
+  /* Was three discrete steps, which matched the boot sequence's register but read
+     as a stutter on something that appears under the cursor several times a
+     minute. Continuous now, and still short: an ease-out over 180 ms, arriving
+     from 6 px below. Only opacity and transform are animated, so it runs on the
+     compositor and cannot be held up by the sheet being filled behind it. */
+  animation: panelIn .18s cubic-bezier(.22, .61, .36, 1);
 }
-@keyframes panelIn { from { opacity: 0; transform: translateY(5px); } }
+@keyframes panelIn { from { opacity: 0; transform: translateY(6px); } }
 .panel--about {
   right: 50%; bottom: 50%; transform: translate(50%, 50%);
   width: 420px; max-height: 74vh; overflow-y: auto;
