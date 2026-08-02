@@ -2,7 +2,7 @@
  *
  * The README quotes 0.57 ms for step() and ~14 ms for a draw, at 60 fps. Those
  * numbers were measured on the 11,728-particle build and the field is now
- * 32,438, so they have been carried in the document as inherited rather than
+ * 32,350, so they have been carried in the document as inherited rather than
  * known. This is the thing that turns them back into measurements.
  *
  * Three separate figures, because they answer different questions:

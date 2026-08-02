@@ -4,8 +4,28 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>CHROMATICA — the colour of six centuries of painting</title>
-<meta name="description" content="Every colour of thousands of public-domain paintings from four open-access museum collections — the Met, the Art Institute of Chicago, Cleveland and the National Gallery of Art — from 1300 to 1910, placed by date and lightness or in the CIE L*a*b* chromatic plane.">
+<meta name="description" content="Every colour of 7,094 public-domain paintings from four open-access museum collections — the Met, the Art Institute of Chicago, Cleveland and the National Gallery of Art — from 1309 to 1910, placed by date and lightness or in the CIE L*a*b* chromatic plane.">
 <meta name="color-scheme" content="dark">
+
+<!-- The preview card. A crawler does not run JavaScript: X, Slack, LinkedIn and
+     the rest fetch this head and draw whatever og:image points at, and the
+     canvas they would have to execute to see the field never runs for them. So
+     og.png is the field rendered as a file, by pipeline/06_og_image.py, from
+     the same dataset and the same arithmetic the app draws with — not a
+     screenshot, so it cannot drift away from what the page actually shows.
+     The URLs are absolute because a crawler resolves them against nothing. -->
+<link rel="canonical" href="https://userman12.github.io/chromatica/">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="CHROMATICA">
+<meta property="og:url" content="https://userman12.github.io/chromatica/">
+<meta property="og:title" content="CHROMATICA — the colour of six centuries of painting">
+<meta property="og:description" content="7,094 public-domain paintings reduced to the 32,350 colours they are actually made of, 1309 to 1910. Every particle is one measured colour of one real painting, clickable back to the museum that holds it.">
+<meta property="og:image" content="https://userman12.github.io/chromatica/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="A dark field of thousands of coloured particles, each one a colour measured from a painting, spread left to right by year from 1309 to 1910 and bottom to top by lightness.">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:creator" content="@userluke_">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' fill='%230a0a0a'/%3E%3Ccircle cx='6.5' cy='6' r='3.2' fill='%23c8873c'/%3E%3Ccircle cx='10' cy='10' r='2.6' fill='%235d7f86'/%3E%3C/svg%3E">
 <link rel="stylesheet" href="css/style.css">
 </head>
@@ -52,7 +72,7 @@
   <p class="stage__hint" id="hint">EVERY PARTICLE IS ONE MEASURED COLOUR OF ONE PAINTING</p>
 </main>
 
-<footer class="hud hud--bottom">
+<footer class="hud hud--bottom" id="foot">
   <div class="controls">
     <div class="cursor">
       <span class="cursor__label" id="cursorLabel">SHOWING</span>
@@ -73,8 +93,8 @@
       <ul class="findlist" id="searchList" hidden></ul>
     </div>
 
-    <div class="filter filter--vs">
-      <label class="filter__label" for="natFilter">SCHOOL <i class="key key--a"></i></label>
+    <div class="filter filter--school">
+      <label class="filter__label" for="natFilter">SCHOOL</label>
       <select id="natFilter"><option value="-1">ALL</option></select>
     </div>
 
@@ -89,8 +109,11 @@
 
   <div class="timeline">
     <span class="timeline__label" id="timelineLabel">BARS WORKS · LINE CHROMA · CLICK FOR TIMELAPSE</span>
+    <!-- Overwritten from the dataset at boot (see compose()); these are the
+         values a screen reader would read in the frames before the module has
+         run, so they say the real span rather than a stale one. -->
     <canvas id="timelineCanvas" tabindex="0" role="slider"
-            aria-label="Year" aria-valuemin="1311" aria-valuemax="1910" aria-valuenow="1311"></canvas>
+            aria-label="Year" aria-valuemin="1309" aria-valuemax="1910" aria-valuenow="1309"></canvas>
     <div class="markchip" id="markChip" hidden></div>
   </div>
 </footer>

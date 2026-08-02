@@ -302,14 +302,22 @@ Runs offline, once, and emits a static JSON plus thumbnails. **Production never
 touches a museum's servers** — images are fetched and resized exactly once here.
 
 ```bash
-python3 -m venv .venv && .venv/bin/pip install pillow numpy scipy scikit-learn
+python3 -m venv .venv && .venv/bin/pip install -r pipeline/requirements.txt
 bash pipeline/00_download_csv.sh      # Met + National Gallery bulk CSVs
 .venv/bin/python pipeline/01_select.py            # all four sources -> 7,499 candidates
 .venv/bin/python pipeline/02_fetch_image_urls.py  # Met only: resolve primaryImageSmall
 .venv/bin/python pipeline/03_palettes.py          # k-means + thumbnails
 .venv/bin/python pipeline/04_build.py             # -> app/data/chromatica.json
 .venv/bin/python pipeline/05_thumbs.py            # thumbnails at THUMB_PX/THUMB_FORMAT
+.venv/bin/python pipeline/06_og_image.py          # -> app/og.png, the preview card
 ```
+
+The requirements are **pinned**, and that is not housekeeping: the output of
+this pipeline is committed, so a rebuild has to produce the same palettes from
+the same images. scikit-learn has changed `KMeans`' default `n_init` once
+already, and a different initialisation over the same 160px image gives
+different cluster centres — which would move colours in the field with no
+change to any code or any data that produced them.
 
 Stages 02, 03 and 05 append to JSONL and are resumable — re-running skips
 finished IDs, which matters because 02 takes ~40 minutes at the rate the API
@@ -352,6 +360,7 @@ to disk.
 | 03 palettes | **7,105 usable** · 377 dropped as greyscale · 22 empty · 11 failed to fetch |
 | 04 build | 7,094 paintings · 32,350 measured colours · 1309–1910 · 1.2 MB |
 | 05 thumbs | 7,094 rendered · 0 failed · 596–640 px long edge · 247 MB committed |
+| 06 og image | 1200×630 preview card, 651 KB, composed from the published dataset |
 
 Per source in the published field: the Met 2,544, the National Gallery 2,689,
 the Art Institute 1,070, Cleveland 791.
@@ -364,6 +373,67 @@ The 243 greyscale rejections are the single largest loss and they are the right
 loss: they are black-and-white archive photographs of paintings, and their
 "palette" would have been a run of neutrals invented by the reproduction rather
 than by the painter.
+
+### The preview card
+
+A crawler does not run JavaScript. X, Slack, LinkedIn and the rest fetch the
+page, read the `<head>`, and draw whatever `og:image` points at; the canvas they
+would have to execute to see the field never runs for them. So the preview has
+to exist as a file, and the only honest file to put there is the field itself.
+
+Stage 06 renders it from `app/data/chromatica.json` with the same arithmetic
+`field.js` and `nebula.js` use — the same Lab conversion, the same deterministic
+hash for the offsets, the same density histogram, the same glow bed and
+skirt-and-core compositing over the same `#0a0a0a`. It is not a screenshot, so
+it rebuilds itself whenever the dataset changes and cannot drift away from what
+the app draws.
+
+Reproducing `hash01` outside a JavaScript engine turned out to be the whole
+difficulty, and the test suite is what found it. The JavaScript is not doing
+32-bit modular arithmetic: `h * 2246822519` is a float64 multiply whose product
+reaches ~9.2e18, past the `2**53` where a double stops holding every integer, so
+it is *rounded* before `>>> 0` truncates it — and `h ^= h >>> bits` yields a
+**signed** int32, so the value entering the next multiply is negative once the
+top bit is set. Exact integer arithmetic diverges at the second step; carrying
+the unsigned value diverges at the third. Neither would have looked wrong: the
+card would simply have been a different, equally plausible arrangement of the
+same colours.
+
+## Tests
+
+```bash
+node --test tests/field.test.mjs                  # the field's arithmetic
+python3 -m unittest discover -s tests -v          # pipeline + published dataset
+```
+
+Built into the two runtimes the project already uses — `node --test` and
+`unittest` — so the suite adds no dependency to a project that deliberately has
+none. Three files, and each covers something whose failure would not *look* like
+a failure:
+
+- **`field.test.mjs`** — the Lab conversion against published sRGB reference
+  values, the determinism the whole visual identity rests on (the same data must
+  compose the same picture, and scrubbing away from a year and back must restore
+  it), the adaptive window's clamps, the search's accent folding and its promise
+  that a dimmed work stays above the 0.12 the picker needs, and the colour
+  search's ceiling. Only `field.js` is covered, and on purpose: it is the whole
+  of the measurement and the only module touching neither DOM nor canvas.
+- **`test_pipeline.py`** — the binning invariant that `build_bins` promises in
+  its docstring and nothing asserted (a bin never splits a year across two
+  columns, or two works of one date would sit in different columns and the axis
+  would no longer be time), the nationality folding, and a check that stage 06's
+  copies of the layout constants still equal the ones in the JavaScript.
+- **`test_dataset.py`** — the committed artefact against what the app assumes:
+  counts that agree with `meta`, every year inside the declared range
+  (`field.js` indexes a typed array with `p.y - y0` and does not bounds-check),
+  hex colours in the exact form the panel compares by string identity, and every
+  referenced thumbnail present with no orphans among the 7,094 committed files.
+
+That last one is the check that earns its place in CI. `app/` is uploaded to
+Pages verbatim, so a painting whose thumbnail never got committed is a broken
+panel in production, and nothing between the working tree and a visitor's
+browser would have said a word about it. The deploy job now `needs:` the test
+job, and pull requests get the checks without publishing.
 
 ## App
 
@@ -432,7 +502,7 @@ canvas that is *held*, and each frame blits that and strokes the marks over it.
 Why it is split that way is below.
 
 The table is the browser measurement, taken **before** the cloud was split out, at
-32,438 particles and dpr 2 on an M-series Mac, driving the real page through the
+32,350 particles and dpr 2 on an M-series Mac, driving the real page through the
 timelapse and back. It is left as measured rather than restated, because it is
 what motivated the split and the figures after it are simulated rather than
 observed in a browser:
@@ -517,10 +587,10 @@ Three things had to be fixed to get there, and two of them were not the particle
   the clock and were being redone sixty times a second anyway. Which particles are
   present and how crowded each cell of the field is depend on the year and the
   filter, so that whole pass is keyed and skipped when neither moved. And the idle
-  breathing, `sin(ωt + phase)` per particle, was 32,438 `Math.sin` calls a frame;
+  breathing, `sin(ωt + phase)` per particle, was 32,350 `Math.sin` calls a frame;
   holding cos and sin of each phase turns it into two sines a frame and a
   multiply-add per particle, by the angle-addition identity. Measured in node over
-  the real dataset, 32,438 particles: the whole collection **1.37 → 0.61 ms**, a
+  the real dataset, 32,350 particles: the whole collection **1.37 → 0.61 ms**, a
   paused timelapse **0.42 → 0.07 ms**, one school **0.16 → 0.06 ms**, and a
   playing timelapse 0.37 → 0.35, which is the case the cache cannot help because
   the year changes every frame. Checked against the previous implementation over
@@ -597,9 +667,13 @@ A school filter narrows the field to one tradition's own colour rather than
 averaging it into everyone else's. A second filter that put two schools on the
 field together, each with its own chroma curve in the strip, was built and then
 pulled back out — on the field it read as one filter or the other, not as a
-comparison, so it is hidden for now rather than shipped half-understood. The
-plumbing (`nat2` in the state, the URL param, the dashed curve) is still there
-for whenever it gets a form people can actually read at a glance.
+comparison, so it was not worth shipping half-understood. It was left wired but
+unreachable for a while, which was the worse of the two states: the code claimed
+a feature the interface could not reach, and `writeURL` wrote a `nat2` parameter
+that `applyURL` never read. It is now removed outright. What makes the
+comparison work without it is that `CHROMA_AXIS` is fixed rather than rescaled
+per filter, so two schools looked at one after the other are still read against
+the same ruler.
 
 **Search dims rather than filters.** Typing a title or an artist into FIND fades
 everything that does not answer to 22% instead of removing it, so the matches are
@@ -692,6 +766,27 @@ since a footer that grows is not a window resize and the canvas would otherwise
 be stretched from a stale backing store, which is also what put the selection
 ring above the pointer. Verified by clicking through every mode in a real browser
 and diffing the rectangle of each control: across all switches, zero pixels.
+
+The same argument reaches one step further than it used to. The detail panel,
+the about panel and the results list are all fixed to the viewport and clear the
+footer by standing at `--foot-h` plus a margin — and `--foot-h` was a constant,
+96px, or 116px under 720px. The footer is not a constant: `.controls` wraps, so
+on a narrow screen it is three rows of controls above the strip, past either
+number, and a panel opened *over* the timeline it was written to clear. It is
+now measured by a second `ResizeObserver` on the footer itself and written back
+as a custom property, for the same reason the label widths are measured rather
+than computed: where the flex row breaks is not knowable from the stylesheet.
+Nothing that reads `--foot-h` can change the footer's own height, so writing it
+back cannot start a loop.
+
+The results list needed the same treatment for a different reason. It is
+anchored to the FIND control with `right: 0` and is 330px wide, which is right
+on a desktop and wrong on a 360px phone, where that control has wrapped away
+from the right edge — so the list ran off the *left* of the screen, taking the
+year column, which is the first thing each row says, with it. Clamping the width
+does not help: the right edge is still pinned to wherever the control landed. On
+a narrow screen it now leaves its anchor and spans the viewport above the
+footer, which is what `.panel` already does there and for the same reason.
 
 **The view is in the URL**, so a reading of the field can be handed to someone:
 `?y=1600` opens the timelapse at a year, paused, `?plane=1` on the chromatic

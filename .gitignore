@@ -1,11 +1,21 @@
-# Pipeline working directory: the 317 MB Met CSV and the resumable append logs.
-# Regenerable from scratch with pipeline/00_download_csv.sh + stages 01-04.
+# Pipeline working directory: the 317 MB Met CSV, the National Gallery CSVs and
+# the resumable append logs. Regenerable from scratch with
+# pipeline/00_download_csv.sh + stages 01-05.
 /data/
 
 # Committed on purpose (GitHub Pages serves them directly, and re-deriving them
-# would mean re-downloading ~2,800 images from the Met on every clone):
-#   app/data/chromatica.json
-#   app/thumbs/*.jpg
+# would mean re-downloading 7,094 images from four museums on every clone):
+#   app/data/chromatica.json     1.2 MB, 351 KB over the wire
+#   app/thumbs/{src}/{id}.webp   7,094 files, 249 MB
+#   app/og.png                   the social preview card, built by stage 06
+#
+# That 249 MB is the standing cost of this repository, and it is paid once per
+# rendering of the set, forever: git keeps every version of every binary, so a
+# rerun of stage 05 at a different size or quality does not replace the old
+# thumbnails, it adds a second copy of all 7,094 to the history. The rule that
+# follows is: re-render only for a change of format or dimensions that is worth
+# a permanent doubling, never to retouch quality. THUMB_QUALITY was settled by
+# measurement (see config.py) precisely so that it would not have to move.
 
 .venv/
 __pycache__/

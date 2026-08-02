@@ -17,8 +17,8 @@
  * Nothing here strokes, outlines, or tints a particle. The only accent-coloured
  * mark on the surface is the ring around a selected one.
  *
- * The one exception, and why: the ground is #0a0a0a, which is L* 2.7, and 2,353
- * of the 32,438 measured colours are below L* 10 — 932 of them below L* 5, some
+ * The one exception, and why: the ground is #0a0a0a, which is L* 2.7, and 1,862
+ * of the 32,350 measured colours are below L* 10 — 473 of them below L* 5, four
  * of them literally #000000. Those are real measurements, mostly the grounds of
  * Caravaggio-descended painting and the burnt browns of old varnish, and they
  * were disappearing into the panel. Two things are done about it, both keyed
@@ -56,10 +56,10 @@ const CORE_SPREAD = 0.9;
 const CORE_ALPHA = 0.52;
 /* Below this lightness a colour starts to lose the panel. L* 24 is where the
    quadratic falloff below first becomes visible at all (lift 0.16 at L* 15, the
-   13th percentile) and where it reaches its full strength only at true black.
-   28% of the colours are under L* 24, but 3/4 of them are touched by less than a
-   fifth of the effect: the correction is aimed at the 2.9% that were actually
-   invisible, not spread across the shadows generally. */
+   12th percentile) and where it reaches its full strength only at true black.
+   25.5% of the colours are under L* 24, but most of them are touched by less
+   than a fifth of the effect: the correction is aimed at the 1.5% below L* 5
+   that were actually invisible, not spread across the shadows generally. */
 const MAT_L = 24;
 const MAT_SPREAD = 1.55;   // between core and skirt, so it reads as an aureole
 const MAT_ALPHA = 0.09;
@@ -75,7 +75,7 @@ export class Nebula {
     this.bed = document.createElement("canvas");
     this.bedCtx = this.bed.getContext("2d");
     /* The cloud is held as a picture rather than rebuilt for every frame that
-       needs to show it. A full render is 116,220 arcs and 64,700 fillStyle
+       needs to show it. A full render is 113,560 arcs and 64,619 fillStyle
        writes, nearly all of them a distinct colour string, and none of that
        depends on which particle happens to be ringed — so pointing at a row in
        the results list used to repaint every colour in the collection in order
@@ -248,7 +248,7 @@ export class Nebula {
   /**
    * One frame: the held cloud, then the marks over it.
    *
-   * Splitting these is the whole of the change. The cloud costs 116,220 arcs and
+   * Splitting these is the whole of the change. The cloud costs 113,560 arcs and
    * depends only on where the particles are; the marks cost at most a couple of
    * hundred strokes and change the instant you point at something. Drawing them
    * on one clock meant every hover repainted every colour in the collection.

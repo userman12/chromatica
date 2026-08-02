@@ -52,7 +52,7 @@ const el = {
   natFilter: $("natFilter"),
   search: $("search"), searchCount: $("searchCount"), searchList: $("searchList"),
   btnTimelapse: $("btnTimelapse"), btnPlay: $("btnPlay"),
-  btnReset: $("btnReset"), btnInfo: $("btnInfo"),
+  btnReset: $("btnReset"), btnInfo: $("btnInfo"), foot: $("foot"),
   timeline: $("timelineCanvas"), timelineLabel: $("timelineLabel"),
   markChip: $("markChip"),
   about: $("about"), aboutClose: $("aboutClose"),
@@ -75,7 +75,6 @@ const state = {
   playing: false,
   cursor: 0,          // the timelapse year, kept as a float so play is smooth
   nat: -1,            // school filter, -1 for all
-  nat2: -1,           // a second school shown beside the first, -1 for none
   query: "",          // free text over title and artist; dims, never removes
   near: -1,           // the colour being asked about, or -1; the other question
   nearInfo: null,     // {hex, worst} — what that question was, for the list header
@@ -89,9 +88,10 @@ const state = {
   tlMark: -1,         // index into field.chromaMarks(nat), the one under the pointer
   cssW: 0, cssH: 0,
   tlW: 0, tlH: 0,
+  footH: 0,           // the footer's real height, published to CSS as --foot-h
   // Last values written to the DOM and to the strip. The field is redrawn every
   // frame because it moves; the panel is not. Writing four readout nodes and 600
-  // bars on every frame cost more than the 11,728 particles did.
+  // bars on every frame cost more than all 32,350 particles did.
   ui: {}, tlKey: "",
   debt: 0,            // unpainted motion, in CSS px
   dirty: true,        // the cloud itself changed: filter, year, layout, search, size
@@ -134,6 +134,28 @@ function measure() {
   state.dirty = true;
 }
 
+/* The footer's real height, published to CSS.
+ *
+ * `--foot-h` is what the detail panel, the about panel and the results list all
+ * stand on: each is fixed to the viewport and clears the footer by sitting at
+ * that height plus a margin. It was a constant — 96px, and 116px under 720px —
+ * and the footer is not a constant. `.controls` wraps, so on a narrow screen it
+ * is three rows of controls above the strip, comfortably past either number,
+ * and a panel opened *over* the timeline it was written to clear.
+ *
+ * Measured rather than computed, for the same reason lockWidths measures: the
+ * height depends on the font the machine happens to have and on where the flex
+ * row happens to break, and neither is knowable from here. Nothing that reads
+ * `--foot-h` can change the footer's own height — they are all fixed-position
+ * offsets — so writing it back cannot start a loop.
+ */
+function measureFoot() {
+  const h = Math.ceil(el.foot.getBoundingClientRect().height);
+  if (h === state.footH) return;
+  state.footH = h;
+  document.documentElement.style.setProperty("--foot-h", `${h}px`);
+}
+
 /* Nothing in these two bars may change width when its text changes. CHROMATIC
    PLANE is five characters longer than CHRONOLOGY, so pressing it moved every
    button beside it; the works count loses a digit as you scrub, so the readout
@@ -173,10 +195,10 @@ function lockWidths() {
   lock(el.statSpan, [wholeSpan, "—"]);
   lock(el.statWindow, ["ALL", "±999 YR"]);
   lock(el.searchCount, [`${num(works)} OF ${num(works)} ↵`]);
-  // Every combination the strip's own label can take, since it sits beside a
-  // canvas that takes the rest of the row.
-  lock(el.timelineLabel, ["LINE", "LINE+DASH"].flatMap((k) =>
-    ["DRAG TO SCRUB", "CLICK FOR TIMELAPSE"].map((a) => `BARS WORKS · ${k} CHROMA · ${a}`)));
+  // Both strings the strip's own label can take, since it sits beside a canvas
+  // that takes the rest of the row.
+  lock(el.timelineLabel, ["DRAG TO SCRUB", "CLICK FOR TIMELAPSE"]
+    .map((a) => `BARS WORKS · LINE CHROMA · ${a}`));
 }
 
 /* ---------- the loop ---------- */
@@ -197,7 +219,7 @@ function frame(now) {
   const tStep = perf ? performance.now() : 0;
   state.field.step({
     year: state.mode === "time" ? state.cursor : null,
-    t, reduceMotion, nat: state.nat, nat2: state.nat2, chrono: state.chrono,
+    t, reduceMotion, nat: state.nat, chrono: state.chrono,
   });
   if (perf) perf.step(performance.now() - tStep);
 
@@ -218,7 +240,7 @@ function frame(now) {
   // something new to draw. The whole-collection view usually has nothing.
   state.debt += state.field.motion;
   /* Two clocks, because the field has two layers that change at different rates.
-     The cloud is 116,220 arcs and only moves when the particles do, so it keeps
+     The cloud is 113,560 arcs and only moves when the particles do, so it keeps
      the motion threshold it always had. The marks over it are a couple of hundred
      strokes and change the instant you point at a row or open a work — and used
      to drag a full repaint of every colour in the collection along with them. */
@@ -301,8 +323,8 @@ function drawTimeline() {
   // nat belongs in both keys: the curve follows the filter, so a school change
   // has to invalidate the strip even mid-timelapse, where it once did not.
   const key = timed
-    ? `t|${from}|${to}|${Math.round(state.cursor)}|${state.nat}|${state.nat2}|${state.tlMark}`
-    : `a|${state.nat}|${state.nat2}|${state.tlMark}`;
+    ? `t|${from}|${to}|${Math.round(state.cursor)}|${state.nat}|${state.tlMark}`
+    : `a|${state.nat}|${state.tlMark}`;
   if (key === state.tlKey) return;
   state.tlKey = key;
 
@@ -341,21 +363,18 @@ function drawTimeline() {
   const yOf = (c) => top + span * (1 - clamp((c - cLo) / (cHi - cLo), 0, 1));
   const marks = F.chromaMarks(state.nat);
 
-  /* Both curves are the same near-white and are told apart by stroke, not by
-     colour: the strip already spends green on the histogram and the handle, and a
-     third hue in 26 px would be read as a third measurement. The axis is fixed
-     (CHROMA_AXIS), so the two are directly comparable — that is the whole point of
-     drawing them together. */
-  const strokeCurve = (nat, dashed) => {
+  /* Near-white, not the accent: the strip already spends green on the histogram
+     and on the timelapse handle, and a third hue in 26 px would be read as a
+     third measurement. The axis is fixed (CHROMA_AXIS) rather than rescaled to
+     whatever the current filter spans, so two schools looked at one after the
+     other are directly comparable. */
+  const strokeCurve = (nat) => {
     const { v, ok } = F.chromaCurve(nat);
     for (const [width, colour, alpha] of [[3.2, "#0a0a0a", 1], [1.3, "#e8f5ef", 0.82]]) {
       ctx.globalAlpha = alpha;
       ctx.strokeStyle = colour;
       ctx.lineWidth = Math.max(1, width * dpr);
       ctx.lineJoin = ctx.lineCap = "round";
-      // The dark pass stays solid: it is the gap cut in the histogram, and a
-      // dashed gap would let the bars through between the dashes.
-      ctx.setLineDash(dashed && colour !== "#0a0a0a" ? [3 * dpr, 3 * dpr] : []);
       ctx.beginPath();
       let drawing = false;
       for (let year = y0; year <= y1; year++) {
@@ -367,11 +386,8 @@ function drawTimeline() {
       }
       ctx.stroke();
     }
-    ctx.setLineDash([]);
   };
-  // Second first, so the school in the main filter is the one on top.
-  if (state.nat2 >= 0) strokeCurve(state.nat2, true);
-  strokeCurve(state.nat, false);
+  strokeCurve(state.nat);
 
   /* --- the curve's own extremes, marked --- */
   /* The line already draws the argument the piece is about — colour at its
@@ -443,7 +459,7 @@ function particleName(i) {
   const F = state.field;
   const p = state.data.paintings[F.owner[i]];
   // Palettes are five entries at most, so walking back to the painting's first
-  // particle is cheaper than storing the base index for all 32,438.
+  // particle is cheaper than storing the base index for all 32,350.
   let k = 0;
   while (i - k - 1 >= 0 && F.owner[i - k - 1] === F.owner[i]) k++;
   return `${state.data.meta.sources[p.c].key}.${p.i}.${k}`;
@@ -487,7 +503,6 @@ function writeURL() {
   const set = (k, v) => (v === null ? q.delete(k) : q.set(k, v));
   set("y", state.mode === "time" ? String(Math.round(state.cursor)) : null);
   set("nat", state.nat >= 0 ? String(state.nat) : null);
-  set("nat2", state.nat2 >= 0 ? String(state.nat2) : null);
   set("plane", state.chrono ? null : "1");
   set("q", state.query ? state.query : null);
   set("w", state.selected >= 0 ? particleName(state.selected) : null);
@@ -587,24 +602,17 @@ function setLayout(chrono) {
   syncURL();
 }
 
-/**
- * Which schools are on the field, as one operation because they constrain each
- * other: ALL in the first means every school is already shown, so a second one
- * would filter nothing, and the same school twice is one school.
- */
-/* The strip carries two things and now sometimes three, and the label is the only
-   place that says which is which. It has to stay short: .timeline__label is
-   nowrap and takes its width off the canvas. */
+/* The strip carries two measurements at once, and the label is the only place
+   that says which is which. It has to stay short: .timeline__label is nowrap
+   and takes its width off the canvas. */
 function paintTimelineLabel() {
-  el.timelineLabel.textContent = `BARS WORKS · ${state.nat2 >= 0 ? "LINE+DASH" : "LINE"} CHROMA · `
+  el.timelineLabel.textContent = "BARS WORKS · LINE CHROMA · "
     + (state.mode === "time" ? "DRAG TO SCRUB" : "CLICK FOR TIMELAPSE");
 }
 
+/** Which school is on the field, or -1 for all of them. */
 function setSchools(nat) {
   state.nat = nat;
-  // nat2 stays wired through step()/paintTimelineLabel/the URL — the "against a
-  // second school" comparison is only hidden for now, not torn out.
-  state.nat2 = -1;
   el.natFilter.value = String(state.nat);
   setTimelineMark(-1);   // the marks belong to the old school; the index would be stale
   state.tlKey = "";
@@ -1053,6 +1061,11 @@ function bindInput() {
      that would have shown the mismatch, and measure() returns immediately when
      the box has not actually changed, so calling it often costs nothing. */
   new ResizeObserver(measure).observe(el.stage);
+  /* Watched separately from the stage, because the two move in opposite
+     directions: the footer growing by a row is exactly what shrinks the stage,
+     so one observer firing on both would be told about the same event twice and
+     still have to measure each box on its own. */
+  new ResizeObserver(measureFoot).observe(el.foot);
 }
 
 /* ---------- hover ---------- */
@@ -1295,6 +1308,7 @@ async function compose(data) {
   fillBlurb(data.meta);
   fillFilter(data);
   measure();
+  measureFoot();
   bindInput();
   setLayout(true);
   setMode("all");

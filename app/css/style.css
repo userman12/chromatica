@@ -17,6 +17,10 @@
   --mono: "JetBrains Mono", "IBM Plex Mono", ui-monospace, SFMono-Regular,
           Menlo, Consolas, monospace;
   --hud-h: 62px;
+  /* A starting value only. measureFoot() overwrites this with the footer's
+     measured height on load and on every reflow, because the footer wraps and
+     no constant here can be right at every width. What reads it — the panels
+     and the results list — must clear the real footer, not a guess at it. */
   --foot-h: 96px;
 }
 
@@ -178,7 +182,7 @@ body { display: flex; flex-direction: column; }
 .cursor__year.is-word { font-size: 13px; letter-spacing: .2em; text-shadow: none; }
 
 .filter { display: flex; align-items: center; gap: 7px; margin-left: auto; }
-.filter--vs { margin-left: 0; }
+.filter--school { margin-left: 0; }
 .filter--find { margin-left: auto; }
 /* The answer, by name. Anchored to the FIND control and opening upward over the
    field, because it is a reading of the field and belongs beside it rather than
@@ -237,11 +241,6 @@ body { display: flex; flex-direction: column; }
 .filter__count { font-size: 8px; letter-spacing: .14em; color: var(--accent); white-space: nowrap;
   display: inline-block; height: 14px; line-height: 14px; }
 .filter__label { font-size: 8px; letter-spacing: .16em; color: #4a504c; }
-/* Which select owns which chroma line in the strip. The two curves are the same
-   near-white — a second colour in there would compete with the histogram — so
-   they are told apart by stroke, and these are the same stroke at label size. */
-.key { display: inline-block; width: 13px; vertical-align: middle; }
-.key--a { border-top: 1px solid var(--text-bright); }
 select:disabled { opacity: .4; cursor: not-allowed; }
 select {
   appearance: none; background: #111; color: var(--text-bright);
@@ -393,6 +392,9 @@ button[aria-pressed="true"] {
 .about__body li::marker { color: #3c423e; }
 
 @media (max-width: 720px) {
+  /* Same again: a starting value, replaced by measurement. Kept close to the
+     real narrow-screen height so that nothing is mispositioned in the frames
+     before the module has run. */
   :root { --foot-h: 116px; --hud-h: 58px; }
   .readout > div:nth-child(n+3) { display: none; }
   .hud__sub, .stage__hint, .cursor__range { display: none; }
@@ -404,6 +406,18 @@ button[aria-pressed="true"] {
   .hud__blurb span { display: none; }
   .timeline__label { display: none; }
   .filter { margin-left: 0; }
+  /* The list is anchored to the FIND control, right: 0, 330px wide. On a 360px
+     viewport that control does not sit at the right edge — the row wraps — so
+     those 330px ran off the left of the screen, and the year column, which is
+     the first thing each row says, was the part that went.
+     Clamping the width alone does not fix it: the right edge is still pinned
+     to wherever the control happens to have wrapped to. So on a narrow screen
+     it leaves its anchor entirely and spans the viewport above the footer, the
+     same treatment .panel already gets here and for the same reason. */
+  .findlist {
+    position: fixed; left: 7px; right: 7px; width: auto;
+    bottom: calc(var(--foot-h) + 9px); max-height: 38vh;
+  }
   .panel, .panel--detail { right: 7px; left: 7px; width: auto; }
   .panel--detail { max-height: 70vh; overflow-y: auto; }
   .panel__body { flex-direction: column; }

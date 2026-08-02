@@ -136,7 +136,7 @@ export class Field {
     this.jy = new Float32Array(n);
     this.jr = new Float32Array(n);      // 0..1, sqrt-distributed for even blob fill
     this.phase = new Float32Array(n);
-    /* The breathing is sin(ωt + phase), which is 32,438 Math.sin calls a frame and
+    /* The breathing is sin(ωt + phase), which is 32,350 Math.sin calls a frame and
        was the single most expensive thing in step(). Held as cos and sin of the
        phase instead, the angle-addition identity turns it into two sines a frame
        and a multiply-add per particle. Same number, arrived at by algebra. */
@@ -191,10 +191,10 @@ export class Field {
      * eye expects of light against black. No colour is altered either way.
      *
      * What that rule decided too much of, though, is contests it had no business
-     * deciding. 32,438 colours over a 100-point scale is a median gap of 0.003
+     * deciding. 32,350 colours over a 100-point scale is a median gap of 0.0016
      * L* between neighbours in the order, so overlapping particles of visually
      * identical lightness were still strictly ranked — by a difference no viewer
-     * can see, and on the 2,474 exact ties by construction order, which is
+     * can see, and on the 2,106 exact ties by construction order, which is
      * chronological. Jittering the key by ORDER_BAND makes those a coin toss
      * while leaving the arrangement intact at any distance the eye can read.
      *
@@ -336,9 +336,9 @@ export class Field {
    * @returns {{v: Float32Array, ok: Uint8Array}} chroma per year, and where it means anything
    */
   chromaCurve(nat = -1) {
-    // Cached per school, not just for the last one asked: comparing two schools
-    // draws two curves every time the strip is rebuilt, and one slot would have
-    // meant recomputing both on every scrub.
+    // Cached per school rather than for the last one asked: the curve depends
+    // on nothing but the school, so switching back to one already computed
+    // should cost nothing, and a single slot would recompute on every change.
     this._curves ??= new Map();
     const hit = this._curves.get(nat);
     if (hit) return hit;
@@ -609,15 +609,12 @@ export class Field {
    * `year` is the timelapse cursor, or null for the default state: the whole
    * collection at once, every painting weighted the same. `nat` is a school index
    * or -1 for all schools — a filter, so a school shows its own colour tradition
-   * rather than being averaged into everyone else's. `nat2` is an optional second
-   * school shown beside the first: the comparison the data invites most is one
-   * tradition against another over the same centuries, and one filter could only
-   * ever answer half of it. `chrono` picks the layout:
+   * rather than being averaged into everyone else's. `chrono` picks the layout:
    * true for year × lightness, false for the a* and b* chromatic plane.
    *
    * Returns nothing; positions and weights are read straight off the arrays.
    */
-  step({ year = null, t = 0, reduceMotion = false, nat = -1, nat2 = -1, chrono = true }) {
+  step({ year = null, t = 0, reduceMotion = false, nat = -1, chrono = true }) {
     const timed = year !== null;
     const sigma = timed ? this.sigmaAt(year) : 0;
     const inv = timed ? 1 / (2 * sigma * sigma) : 0;
@@ -631,7 +628,7 @@ export class Field {
        collection, this pass produced a byte-identical answer sixty times a second.
        Keyed and skipped instead; the arrays are still there from last time, which
        is why density is only cleared on the branch that refills it. */
-    const wKey = `${timed ? year : "a"}|${nat}|${nat2}|${chrono}|${this.searchKey}`;
+    const wKey = `${timed ? year : "a"}|${nat}|${chrono}|${this.searchKey}`;
     if (wKey !== this._wKey) {
       this._wKey = wKey;
       density.fill(0);
@@ -639,8 +636,14 @@ export class Field {
       const searching = this.searching, matchOf = this.matchOf;
       let total = 0, works = 0, matched = 0, markN = 0;
       for (let i = 0; i < n; i++) {
-        const school = this.natOf[i];
-        if (nat >= 0 && school !== nat && school !== nat2) { this.w[i] = 0; continue; }
+        /* One school or all of them. This used to admit a second school as
+           well, and the sentinel for "no second school" was -1 — which is also
+           what natOf falls back to for a painting the build left without a
+           school, so an unattributed work matched the absence of a filter and
+           appeared under every school at once. Nothing in the current dataset
+           reaches that fallback, so it was never visible. With the comparison
+           gone the case cannot arise: -1 is never equal to a real index. */
+        if (nat >= 0 && this.natOf[i] !== nat) { this.w[i] = 0; continue; }
         let wt = 1;
         if (timed) {
           const d = this.year[i] - year;
@@ -744,7 +747,7 @@ export class Field {
      * uses it to decide whether the picture is worth redrawing: once the whole
      * collection has settled, the only motion left is the idle breathing, which
      * moves about 0.03 px per frame. Redrawing that 60 times a second repaints
-     * 11,728 particles to change nothing an eye can see. */
+     * 32,350 particles to change nothing an eye can see. */
     this.motion = Math.sqrt(moved);
     this.stats = { works, colours, from, to, sigma, matched };
   }

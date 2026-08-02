@@ -1,0 +1,23 @@
+# Pipeline dependencies, pinned.
+#
+# Pinned rather than floated because the output of this pipeline is committed:
+# app/data/chromatica.json and 7,094 thumbnails are in the repository, and a
+# rebuild has to produce the same palettes from the same images. k-means is the
+# reason. scikit-learn has changed KMeans' default `n_init` once already, and a
+# different initialisation over the same 160px image gives different cluster
+# centres -- which would silently move colours in the field with no change to
+# any of the code or the data that produced them.
+#
+# These are the versions the published dataset (generatedAt 2026-07-28) was
+# actually built with, on Python 3.11.10.
+#
+#     python3 -m venv .venv
+#     .venv/bin/pip install -r pipeline/requirements.txt
+#
+# Stage 6 (the social preview card) needs only Pillow and numpy, both already
+# here for the palette work.
+
+pillow==12.3.0
+numpy==2.4.6
+scipy==1.17.1
+scikit-learn==1.9.0
