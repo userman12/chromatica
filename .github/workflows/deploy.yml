@@ -39,8 +39,10 @@ jobs:
           cache-dependency-path: pipeline/requirements.txt
       - run: pip install -r pipeline/requirements.txt
 
-      - name: field arithmetic
-        run: node --test tests/field.test.mjs
+      # The glob rather than the directory: `node --test tests/` treats the path
+      # as a module to run and fails on a directory.
+      - name: field arithmetic, and the app booting
+        run: node --test tests/*.mjs
 
       - name: pipeline invariants and published dataset
         run: python -m unittest discover -s tests -v

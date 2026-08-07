@@ -42,7 +42,7 @@ const RING_MS = 170;
 const $ = (id) => document.getElementById(id);
 const el = {
   boot: $("boot"), bootLog: $("bootLog"),
-  hudSub: $("hudSub"),
+  scope: $("scope"),
   statWorks: $("statWorks"), statColours: $("statColours"),
   statSpan: $("statSpan"), statWindow: $("statWindow"),
   stage: $("stage"), field: $("field"), hint: $("hint"), hoverchip: $("hoverchip"),
@@ -52,7 +52,7 @@ const el = {
   natFilter: $("natFilter"),
   search: $("search"), searchCount: $("searchCount"), searchList: $("searchList"),
   btnTimelapse: $("btnTimelapse"), btnPlay: $("btnPlay"),
-  btnReset: $("btnReset"), btnInfo: $("btnInfo"), foot: $("foot"),
+  btnInfo: $("btnInfo"), foot: $("foot"),
   timeline: $("timelineCanvas"), timelineLabel: $("timelineLabel"),
   markChip: $("markChip"),
   about: $("about"), aboutClose: $("aboutClose"),
@@ -61,7 +61,6 @@ const el = {
   detailTitle: $("detailTitle"), detailArtist: $("detailArtist"),
   detailYear: $("detailYear"), detailNat: $("detailNat"), detailId: $("detailId"),
   detailSource: $("detailSource"), aboutSources: $("aboutSources"),
-  hudBlurbScope: $("hudBlurbScope"),
   detailPalette: $("detailPalette"), detailSwatches: $("detailSwatches"),
   detailLink: $("detailLink"), btnNear: $("btnNear"),
 };
@@ -85,6 +84,7 @@ const state = {
   preview: -1,        // particle ringed by pointing at a result row, not selected
   listKey: null,      // field.viewKey the list was built from
   hover: -1,
+  hintSpent: false,   // the opening line has been read; it does not come back
   tlMark: -1,         // index into field.chromaMarks(nat), the one under the pointer
   cssW: 0, cssH: 0,
   tlW: 0, tlH: 0,
@@ -92,7 +92,7 @@ const state = {
   // Last values written to the DOM and to the strip. The field is redrawn every
   // frame because it moves; the panel is not. Writing four readout nodes and 600
   // bars on every frame cost more than all 32,350 particles did.
-  ui: {}, tlKey: "",
+  ui: {}, tlKey: "", scopeKey: null,
   debt: 0,            // unpainted motion, in CSS px
   dirty: true,        // the cloud itself changed: filter, year, layout, search, size
   marks: true,        // only the marks over it changed: selection, preview, ring
@@ -258,6 +258,12 @@ function frame(now) {
     if (cloudStale) { state.debt = 0; state.dirty = false; }
   }
   paintReadout();
+  /* Driven from the loop rather than from each setter, for the same reason the
+     readout and the strip are: the scope line describes five independent pieces
+     of state, and hanging it off every setter that can move one of them is a
+     list that will eventually be missing an entry — it already was. It is keyed
+     on its own text, so a frame that changes nothing costs one string compare. */
+  paintScope();
   drawTimeline();
   if (perf) perf.render(now, state.field);
   requestAnimationFrame(frame);
@@ -631,8 +637,14 @@ function setSchools(nat) {
 function setQuery(query) {
   state.query = query;
   // Both questions fill the same array, so only one can be standing. Typing puts
-  // the colour question away rather than fighting it for the field.
-  if (state.near >= 0) { state.near = -1; state.nearInfo = null; paintNear(); }
+  // the colour question away rather than fighting it for the field — and now
+  // says so, because it used to happen in silence: a colour question you had
+  // deliberately asked vanished the moment you typed a letter, with the chip
+  // that named it disappearing from the scope line and nothing put in its place.
+  if (state.near >= 0) {
+    state.near = -1; state.nearInfo = null; paintNear();
+    if (query) note("THE COLOUR QUESTION WAS PUT AWAY — ONE AT A TIME");
+  }
   state.field.setSearch(query);
   /* The box is only written when it does not already say this, *ignoring* the
      spaces at its ends — because the query is trimmed and every space is a
@@ -657,7 +669,8 @@ function setQuery(query) {
    the neighbours' are the thin marks — so the reference and the answers are
    told apart on the field without a third kind of mark being invented. */
 function setNear(particle) {
-  if (state.query) setQuery("");   // one question at a time
+  const displaced = state.query;   // one question at a time, and it is said
+  if (displaced) setQuery("");
   const found = state.field.setNear(particle);
   state.near = particle;
   state.nearInfo = { hex: state.field.css[particle], worst: found.worst };
@@ -665,6 +678,7 @@ function setNear(particle) {
   state.matchTotal = found.works;
   state.dirty = true;
   paintNear();
+  if (displaced) note(`“${displaced}” WAS PUT AWAY — ONE QUESTION AT A TIME`);
   syncURL();
 }
 
@@ -742,12 +756,26 @@ function paintMatchList() {
     : "";
   el.searchList.innerHTML = head + shown.map((i, k) => {
     const p = state.data.paintings[F.owner[i]];
+    /* A row is a button, not a decorated <li>. It was reachable by pointer
+       only: the walk with Enter from the search box has always existed, but
+       anyone arriving here with Tab found a list of paintings and no way to
+       open one. The particle field cannot be made reachable this way and
+       should not pretend to be — but this list is words, and words are the
+       part a keyboard and a screen reader can actually have. */
     return `<li data-k="${k}" class="${k === state.matchAt ? "is-at" : ""}">`
+      + `<button type="button" tabindex="0">`
       + `<b>${span(p.s, p.e)}</b><span>${escapeHtml(p.t || "Untitled")}`
-      + `<i>${escapeHtml(p.a || "Unattributed")}</i></span></li>`;
+      + `<i>${escapeHtml(p.a || "Unattributed")}</i></span></button></li>`;
   }).join("")
+    /* Past MARK_CAP the field stops ringing the matches as well, and that was
+       never said: the list admitted it had more rows than it was showing, but
+       the picture had quietly stopped answering too, so a wide search looked
+       like a narrow one that had simply missed. Both halves are stated now,
+       and the cap they share is named once rather than written twice. */
     + (list.length > shown.length
-      ? `<li class="findlist__more">${num(list.length - shown.length)} MORE — NARROW THE SEARCH</li>`
+      ? `<li class="findlist__more">${num(list.length - shown.length)} MORE`
+        + (list.length > MATCH_ROWS ? " · TOO MANY TO RING ON THE FIELD" : "")
+        + " — NARROW THE SEARCH</li>"
       : "")
     // Said rather than left as an empty box: the works exist, the filter on the
     // field is what is hiding them, and that is the actionable half of it.
@@ -798,13 +826,169 @@ function paintCopy() {
   el.btnLayout.title = state.chrono
     ? "Restack the same colours by hue instead of by year"
     : "Spread the same colours along the years again";
-  el.hint.textContent = timed
-    ? "DRAG THE FIELD OR THE STRIP · ← → TO STEP A YEAR"
-    : "EVERY PARTICLE IS ONE MEASURED COLOUR OF ONE PAINTING";
-  el.hudSub.textContent = (state.chrono
-    ? "YEAR × LIGHTNESS · THE COLLECTION UNROLLED IN TIME"
-    : "CIE L*a*b* CHROMATIC PLANE · PLACED BY HUE")
-    + (timed ? " · MOVING WINDOW IN TIME" : " · CLICK A PARTICLE FOR ITS PAINTING");
+  // Only while the hint is still the hint. Once it has been spent, or while it
+  // is carrying a note, this line is not paintCopy's to write.
+  if (!state.hintSpent && !el.hint.classList.contains("is-note")) {
+    el.hint.textContent = timed
+      ? "DRAG THE FIELD OR THE STRIP · ← → TO STEP A YEAR"
+      : "EVERY PARTICLE IS ONE MEASURED COLOUR OF ONE PAINTING";
+  }
+}
+
+/* ---------- the line under the field ----------
+ *
+ * One element, two jobs, and never both at once.
+ *
+ * At rest it is the opening hint — what a particle is — and it fades out for
+ * good once you have touched anything, because a sentence you have already
+ * read and acted on is a sentence the picture is paying rent for. It used to
+ * be permanent.
+ *
+ * The rest of the time it is where the interface says the thing it has just
+ * done to you unasked. There are exactly two such things, and both are the
+ * same rule: the field answers one question at a time, so asking a colour
+ * question puts a typed one away and vice versa. That happened in silence,
+ * which made a deliberate action look like a bug.
+ */
+const HINT_MS = 2600;      // how long a note stays before the line goes quiet
+let noteTimer = 0;
+
+function note(text) {
+  clearTimeout(noteTimer);
+  el.hint.textContent = text;
+  el.hint.classList.add("is-note");
+  el.hint.classList.remove("is-spent");
+  noteTimer = setTimeout(() => {
+    el.hint.classList.remove("is-note");
+    el.hint.classList.add("is-spent");
+  }, HINT_MS);
+}
+
+/** The opening hint has been read; it does not come back. */
+function spendHint() {
+  if (state.hintSpent) return;
+  state.hintSpent = true;
+  if (!el.hint.classList.contains("is-note")) el.hint.classList.add("is-spent");
+}
+
+/* ---------- the scope line ---------- */
+/*
+ * What you are looking at, in words, above the field.
+ *
+ * This replaces three lines of permanent prose — two of blurb and one naming
+ * the layout — with one line that says strictly more. The old ones described
+ * the collection and the current layout and never mentioned the thing hardest
+ * to keep in your head: what you have narrowed to. Five independent variables
+ * (layout, year window, school, text query, colour question) could all be true
+ * at once and no single place on screen said so. RESET existed because of that,
+ * and RESET is the weaker answer: it can undo the state but it cannot teach it.
+ *
+ * So each narrowing is a chip, each chip lifts exactly its own constraint, and
+ * with nothing narrowed the line states the size of the whole instead — which
+ * is what the blurb was for. One element, four jobs, and it is never blank.
+ */
+const SCOPE_LABEL = {
+  plane: "CHROMATIC PLANE",
+  chrono: "YEAR × LIGHTNESS",
+};
+
+/** The chips, as data. Rendered by paintScope, acted on by the click handler. */
+function scopeChips() {
+  const chips = [];
+  const F = state.field, meta = state.data.meta;
+
+  // The layout is always shown, and is the one chip that is never removable:
+  // there is no "no layout". Pressing it swaps to the other reading, which is
+  // what the button in the footer does — the chip is the same control said in
+  // the place you are already reading.
+  chips.push({
+    key: "layout", swap: true,
+    text: state.chrono ? SCOPE_LABEL.chrono : SCOPE_LABEL.plane,
+  });
+
+  if (state.mode === "time") {
+    const s = F.stats;
+    chips.push({ key: "time", text: `${span(s.from, s.to)} · MOVING WINDOW` });
+  }
+  if (state.nat >= 0) {
+    chips.push({ key: "nat", text: (meta.nationalities[state.nat] || "?").toUpperCase() });
+  }
+  if (state.query) {
+    chips.push({ key: "query", text: `“${state.query}” · ${num(F.stats.matched)}` });
+  }
+  if (state.near >= 0 && state.nearInfo) {
+    chips.push({
+      key: "near", swatch: state.nearInfo.hex,
+      text: `LIKE ${state.nearInfo.hex.toUpperCase()} · ${num(F.stats.matched)}`,
+    });
+  }
+  return chips;
+}
+
+/** True when anything at all has been narrowed away from the opening state. */
+const narrowed = () =>
+  state.mode === "time" || state.nat >= 0 || Boolean(state.query) || state.near >= 0;
+
+function paintScope() {
+  const meta = state.data.meta;
+  const chips = scopeChips();
+  // Keyed so the DOM is only rewritten when the words actually change. This
+  // runs from paintCopy on every mode change and the timelapse changes `from`
+  // and `to` continuously, so without this it would rebuild sixty times a
+  // second — the same fault the readout and the strip already guard against.
+  const key = JSON.stringify(chips) + String(narrowed());
+  if (key === state.scopeKey) return;
+  state.scopeKey = key;
+
+  const scope = chips.map((chip) =>
+    `<button class="scope__chip${chip.swap ? " scope__chip--swap" : ""}" data-scope="${chip.key}">`
+    + (chip.swatch ? `<i style="background:${chip.swatch}"></i>` : "")
+    + escapeHtml(chip.text)
+    + (chip.swap ? "" : chip.key === "layout" ? "" : "<b>×</b>")
+    + "</button>").join("");
+
+  // With nothing narrowed the line says what the whole thing is. That sentence
+  // used to be the blurb, and it is read off the data so it cannot go stale.
+  const whole = narrowed() ? "" :
+    `<span class="scope__whole">${num(meta.totalPaintings)} PAINTINGS · `
+    + `${num(meta.totalCells)} MEASURED COLOURS · ${meta.yearRange[0]}–${meta.yearRange[1]}`
+    + ` · ${meta.sources.length} COLLECTIONS</span>`;
+
+  const clear = narrowed()
+    ? `<button class="scope__clear" data-scope="all" title="Back to the whole collection">CLEAR ALL</button>`
+    : "";
+
+  el.scope.innerHTML = scope + whole + clear
+    + `<button class="scope__copy" data-scope="copy" title="Copy a link to exactly this view">⧉</button>`;
+}
+
+/* The permalink was already complete and entirely invisible: every part of the
+   view has been in the URL for weeks — year, layout, school, query, and which
+   particle of which painting is open, named so it survives a rebuild of the
+   dataset — and nothing anywhere said so. One button is the whole fix. */
+async function copyView() {
+  writeURL();   // the URL is written on a trailing throttle; make it current first
+  const link = location.href;
+  const say = (text) => {
+    const button = el.scope.querySelector(".scope__copy");
+    if (!button) return;
+    button.textContent = text;
+    setTimeout(() => { state.scopeKey = null; paintScope(); }, 1400);
+  };
+  try {
+    await navigator.clipboard.writeText(link);
+    say("COPIED");
+  } catch {
+    // Clipboard access is refused on an insecure origin and in some embeddings.
+    // Selecting the text is the fallback that has always worked.
+    const box = document.createElement("input");
+    box.value = link;
+    document.body.appendChild(box);
+    box.select();
+    const ok = document.execCommand?.("copy");
+    box.remove();
+    say(ok ? "COPIED" : "⧉");
+  }
 }
 
 function paintPlay() {
@@ -892,6 +1076,7 @@ function bindInput() {
   /* --- the strip: scrubs in the timelapse, and is the way into it otherwise --- */
   let onStrip = false;
   el.timeline.addEventListener("pointerdown", (event) => {
+    spendHint();
     onStrip = true;
     el.timeline.setPointerCapture(event.pointerId);
     // On a mark, the mark's own year rather than the one under the finger: the
@@ -920,6 +1105,7 @@ function bindInput() {
   /* --- the field: a tap opens a painting; in the timelapse a drag also scrubs --- */
   let drag = null;
   el.stage.addEventListener("pointerdown", (event) => {
+    spendHint();   // you have touched the field; you no longer need telling what it is
     el.stage.setPointerCapture(event.pointerId);
     drag = { x: event.clientX, from: state.cursor, moved: 0 };
   });
@@ -965,12 +1151,27 @@ function bindInput() {
   });
   el.btnPlay.addEventListener("click", () => setPlaying(!state.playing));
   el.btnLayout.addEventListener("click", () => setLayout(!state.chrono));
-  el.btnReset.addEventListener("click", () => {
-    setSchools(-1);
-    setQuery("");
-    hideDetail();
-    setLayout(true);
-    setMode("all");
+  /* The scope line, delegated because its chips are rewritten whenever the
+     view changes. Each chip lifts exactly the one constraint it names — which
+     is the whole difference between this and the RESET button it replaces. */
+  el.scope.addEventListener("click", (event) => {
+    const chip = event.target.closest("[data-scope]");
+    if (!chip) return;
+    switch (chip.dataset.scope) {
+      case "layout": setLayout(!state.chrono); break;
+      case "time": setMode("all"); break;
+      case "nat": setSchools(-1); hideDetail(); break;
+      case "query": setQuery(""); break;
+      case "near": clearNear(); break;
+      case "copy": copyView(); break;
+      case "all":
+        setSchools(-1);
+        setQuery("");
+        if (state.near >= 0) clearNear();
+        hideDetail();
+        setMode("all");
+        break;
+    }
   });
   el.natFilter.addEventListener("change", () => {
     setSchools(Number(el.natFilter.value));
@@ -997,6 +1198,31 @@ function bindInput() {
     }
   });
   el.searchList.addEventListener("pointerleave", () => {
+    if (state.preview < 0) return;
+    state.preview = -1;
+    state.marks = true;
+  });
+  /* Tabbing onto a row rings its blob, exactly as pointing at one does. The
+     rows carry the same answer either way, so they should light the same part
+     of the field either way — otherwise the keyboard path is a list of names
+     with the picture beside it gone dark. Rows are buttons now, so `focusin`
+     is the keyboard's `pointerover`. */
+  el.searchList.addEventListener("focusin", (event) => {
+    const row = event.target.closest("li[data-k]");
+    if (!row) return;
+    const next = state.matchIds[+row.dataset.k] ?? -1;
+    if (next === state.preview) return;
+    state.preview = next;
+    state.marks = true;
+    if (next >= 0) {
+      const p = state.data.paintings[state.field.owner[next]];
+      preload(`thumbs/${state.data.meta.sources[p.c].key}/${p.i}.webp`);
+    }
+  });
+  el.searchList.addEventListener("focusout", (event) => {
+    // Only when focus has actually left the list, not when it moves between
+    // two rows inside it — which fires focusout on the one being left.
+    if (el.searchList.contains(event.relatedTarget)) return;
     if (state.preview < 0) return;
     state.preview = -1;
     state.marks = true;
@@ -1076,10 +1302,18 @@ function showChip(px, py) {
   const p = state.data.paintings[F.owner[hit]];
   if (hit !== state.hover) {
     state.hover = hit;
+    /* The last line is the only advertisement for the best thing here.
+       "Colours like this one" is what this dataset answers better than any
+       other question, and it lived two clicks deep: you had to already have
+       clicked a particle, then find a button in the panel. Anyone who never
+       clicked a particle never learned it existed. Saying it on the chip costs
+       no new chrome and puts the offer exactly where the curiosity is — under
+       a colour someone has just pointed at. */
     el.hoverchip.innerHTML =
       `<b>${escapeHtml(p.t || "Untitled")}</b>`
       + `<i>${escapeHtml(p.a || "Unattributed")} · ${span(p.s, p.e)}</i><br>`
-      + `<code>${F.css[hit].toUpperCase()}</code>`;
+      + `<code>${F.css[hit].toUpperCase()}</code>`
+      + `<u>CLICK · THEN COLOURS LIKE THIS ONE</u>`;
   }
   el.hoverchip.hidden = false;
   // Keep the chip inside the stage: measured, not guessed from the text length.
@@ -1234,15 +1468,6 @@ function fillAbout(meta) {
     + `${num(s.n)} paintings</li>`).join("");
 }
 
-/** The blurb states the size of the thing, so it is read off the thing. */
-function fillBlurb(meta) {
-  if (!el.hudBlurbScope) return;
-  el.hudBlurbScope.textContent =
-    `EVERY COLOUR MEASURED IN ${num(meta.totalPaintings)} PAINTINGS, `
-    + `${meta.yearRange[0]}–${meta.yearRange[1]}, ACROSS `
-    + `${meta.sources.length} OPEN-ACCESS COLLECTIONS.`;
-}
-
 /** Schools, most represented first, with their counts: the filter states its own bias. */
 function fillFilter(data) {
   const counts = new Map();
@@ -1305,7 +1530,6 @@ async function compose(data) {
   el.timeline.setAttribute("aria-valuemin", state.field.y0);
   el.timeline.setAttribute("aria-valuemax", state.field.y1);
   fillAbout(data.meta);
-  fillBlurb(data.meta);
   fillFilter(data);
   measure();
   measureFoot();

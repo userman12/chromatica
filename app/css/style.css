@@ -84,19 +84,55 @@ body { display: flex; flex-direction: column; }
   color: var(--text-bright); font-weight: 700;
   letter-spacing: .34em; font-size: 12px;
 }
-/* The one piece of prose in the interface. Wider than the labels around it and a
-   shade brighter, so it reads as a sentence rather than as another readout. */
-.hud__blurb {
-  font-size: 9px; line-height: 1.6; letter-spacing: .05em;
-  color: #7d857f; max-width: 64ch;
+/* ---------- the scope line ----------
+   What you are looking at, in words, where three lines of permanent prose used
+   to be. Every narrowing is a chip and every chip lifts its own constraint.
+
+   It is allowed to wrap and it is the one place in this interface where a
+   change of text may change a height — which is why it lives in the top bar and
+   not the footer. The top bar is above the canvas: it pushes the field down by
+   a few pixels and the field is remeasured by the ResizeObserver on the stage.
+   The same text in the footer would resize the canvas from underneath the
+   pointer, which is the fault every other control here is built to avoid. */
+.scope {
+  display: flex; align-items: center; flex-wrap: wrap; gap: 5px;
+  margin-top: 3px; min-height: 18px;
 }
-.hud__blurb span { display: block; color: #575e59; }
-.hud__sub { letter-spacing: .16em; font-size: 9px; color: #4a504c; margin-top: 2px; }
+.scope__chip {
+  display: inline-flex; align-items: center; gap: 5px;
+  background: #131313; color: var(--text-bright);
+  border: 1px solid var(--line); border-radius: 0;
+  font-family: var(--mono); font-size: 9px; letter-spacing: .12em;
+  padding: 3px 7px; min-width: 0; cursor: pointer;
+  transition: color .12s linear, border-color .12s linear;
+}
+.scope__chip:hover { color: var(--accent); border-color: var(--accent); }
+/* The × is the affordance, so it brightens with the chip rather than sitting
+   at full strength and reading as the important part of the label. */
+.scope__chip b { font-weight: 400; color: #575e59; font-size: 11px; line-height: 1; }
+.scope__chip:hover b { color: var(--accent); }
+.scope__chip i { width: 14px; height: 9px; flex: 0 0 14px; display: block; }
+/* The layout chip swaps rather than clears — there is no "no layout" — so it
+   is drawn as a statement with no × rather than as a removable narrowing. */
+.scope__chip--swap { background: none; border-color: #191919; color: #7d857f; }
+
+/* With nothing narrowed the line states the size of the whole thing. This is
+   the sentence the blurb used to carry, read off the data. */
+.scope__whole {
+  font-size: 9px; letter-spacing: .1em; color: #575e59; white-space: nowrap;
+}
+.scope__clear, .scope__copy {
+  background: none; border: none; color: #4a504c;
+  font-family: var(--mono); font-size: 9px; letter-spacing: .14em;
+  padding: 3px 4px; min-width: 0; cursor: pointer;
+}
+.scope__clear:hover, .scope__copy:hover { color: var(--accent); border: none; }
+.scope__copy { font-size: 11px; }
 
 .readout { display: flex; gap: 20px; margin: 0; }
 .readout > div { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; }
 .readout dt { font-size: 8px; letter-spacing: .16em; color: #4a504c; }
-.readout dt, .readout dd, .hud__sub { white-space: nowrap; }
+.readout dt, .readout dd { white-space: nowrap; }
 /* Each dd is held at the width of its widest possible value (see lockWidths), so
    the text inside it has to be pinned to the right or the numbers would jitter
    inside their own reserved box while you scrub. */
@@ -124,9 +160,15 @@ body { display: flex; flex-direction: column; }
 .stage__hint {
   position: absolute; left: 0; right: 0; bottom: 10px; margin: 0;
   text-align: center; font-size: 8px; letter-spacing: .22em; color: #343a36;
-  pointer-events: none; transition: opacity .4s linear;
+  pointer-events: none; transition: opacity .4s linear, color .3s linear;
 }
 .stage.is-scrubbing .stage__hint { opacity: 0; }
+/* Read and acted on: it goes, and does not come back. A permanent instruction
+   is rent the picture pays forever for a sentence understood in two seconds. */
+.stage__hint.is-spent { opacity: 0; }
+/* The same line carrying something the interface has just done unasked. Lit,
+   because unlike the hint it is news — and it overrides is-spent. */
+.stage__hint.is-note { opacity: 1; color: var(--accent); }
 
 /* Names the two axes, because nothing is drawn on the field to name them. Set a
    step brighter than the hint: which measurement is up and which is across is not
@@ -147,6 +189,14 @@ body { display: flex; flex-direction: column; }
 .hoverchip b { color: var(--accent); font-weight: 500; display: block; }
 .hoverchip i { color: #6f7671; font-style: normal; }
 .hoverchip code { color: var(--text); letter-spacing: .06em; }
+/* The offer, not a reading: dimmer than the measurement above it and set apart
+   by a rule, so it reads as the interface speaking rather than as another
+   property of the painting. */
+.hoverchip u {
+  display: block; margin-top: 5px; padding-top: 4px;
+  border-top: 1px solid #ffffff14; text-decoration: none;
+  font-size: 8px; letter-spacing: .14em; color: #4a504c;
+}
 
 /* ---------- bottom controls ---------- */
 .controls { display: flex; align-items: center; gap: 18px; flex-wrap: wrap; }
@@ -198,10 +248,24 @@ body { display: flex; flex-direction: column; }
 }
 .findlist li {
   display: flex; gap: 8px; align-items: baseline;
-  padding: 4px 9px; cursor: pointer; border-bottom: 1px solid #ffffff0d;
+  border-bottom: 1px solid #ffffff0d;
 }
 .findlist li:last-child { border-bottom: none; }
+/* The row itself is a button now, so it is reachable with Tab and activates on
+   Enter without a keydown handler. It has to be stripped back to looking like
+   the row it replaced: full width, left aligned, no chrome of its own. */
+.findlist li > button {
+  display: flex; gap: 8px; align-items: baseline;
+  width: 100%; text-align: left;
+  background: none; border: none; border-radius: 0;
+  padding: 4px 9px; min-width: 0; cursor: pointer;
+  font-family: var(--mono); letter-spacing: normal;
+}
+.findlist li > button:hover { color: inherit; border: none; }
 .findlist li:hover, .findlist li.is-at { background: var(--accent-dim); }
+/* Inset rather than outlined: the list has a 1px accent border of its own a few
+   pixels away, and an outline offset outwards lands on top of it. */
+.findlist li > button:focus-visible { outline: 1px solid var(--accent); outline-offset: -2px; }
 /* The year first and in the accent: this collection is read along time, so the
    date is the coordinate you are looking the work up by. */
 .findlist b { color: var(--accent); font-weight: 500; font-size: 10px; flex: 0 0 62px; }
@@ -397,13 +461,16 @@ button[aria-pressed="true"] {
      before the module has run. */
   :root { --foot-h: 116px; --hud-h: 58px; }
   .readout > div:nth-child(n+3) { display: none; }
-  .hud__sub, .stage__hint, .cursor__range { display: none; }
-  /* The axes line stays: with the sub-header gone it is the only thing left that
-     says what the two directions mean. */
+  .stage__hint, .cursor__range { display: none; }
+  /* The axes line stays: it is the only thing left that says what the two
+     directions mean. */
   .stage__axes { letter-spacing: .1em; padding: 0 8px; }
-  /* Room for one line of prose, not two. */
-  .hud__blurb { font-size: 8px; max-width: 40ch; }
-  .hud__blurb span { display: none; }
+  /* The chips stay — they are the state, and on a small screen knowing what
+     you have narrowed to matters more, not less. What goes is the sentence
+     about the size of the collection, which is context rather than state and
+     is one wrap too many at this width. */
+  .scope__whole { display: none; }
+  .scope { gap: 4px; }
   .timeline__label { display: none; }
   .filter { margin-left: 0; }
   /* The list is anchored to the FIND control, right: 0, 330px wide. On a 360px

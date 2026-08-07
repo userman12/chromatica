@@ -122,23 +122,37 @@ class TestDates(DatasetCase):
                                  f"{p['i']}: dated too loosely to place on a time axis")
 
 
-class TestBins(DatasetCase):
-    def test_bins_partition_the_paintings_in_order(self):
-        bins = self.data["bins"]
-        self.assertEqual(bins[0]["p0"], 0)
-        self.assertEqual(bins[-1]["p1"], len(self.paintings))
-        for a, b in zip(bins, bins[1:]):
-            self.assertEqual(a["p1"], b["p0"], "bins must tile the array with no gap")
-            self.assertLess(a["e"], b["s"], "bin spans must not overlap")
+class TestOrdering(DatasetCase):
+    """The bins are no longer shipped, but they still decide the order.
 
-    def test_a_year_never_straddles_two_bins(self):
-        # The invariant 04_build.py's build_bins() promises, asserted against
-        # the artefact it actually produced.
-        home = {}
-        for i, b in enumerate(self.data["bins"]):
-            for p in self.paintings[b["p0"]:b["p1"]]:
-                self.assertEqual(home.setdefault(p["y"], i), i,
-                                 f"year {p['y']} is split across bins")
+    They were built for a column layout the app stopped using when it became a
+    particle field, and nothing in app/js ever read them: 55 KB sent to every
+    visitor to be parsed and ignored. What survives is what they were actually
+    good for -- a stable chronological order that never splits a year -- and
+    that is a property of the painting array itself, so it is asserted there.
+    """
+
+    def test_the_payload_carries_no_bins(self):
+        self.assertNotIn("bins", self.data, "dead weight is back in the payload")
+        for p in self.paintings:
+            self.assertNotIn("b", p, "the per-painting bin index is back")
+
+    def test_paintings_are_in_chronological_order(self):
+        years = [p["y"] for p in self.paintings]
+        self.assertEqual(years, sorted(years), "the array must be ordered by year")
+
+    def test_every_year_is_contiguous(self):
+        """A year never appears, stop, and appear again.
+
+        This is what build_bins() promised by never splitting a year across two
+        columns, expressed against the artefact instead of the intermediate.
+        """
+        seen, previous = set(), None
+        for p in self.paintings:
+            if p["y"] != previous:
+                self.assertNotIn(p["y"], seen, f"year {p['y']} is split in the array")
+                seen.add(p["y"])
+                previous = p["y"]
 
 
 class TestThumbnails(DatasetCase):

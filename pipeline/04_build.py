@@ -276,11 +276,19 @@ def main():
     present = [k for k in C.SOURCE_ORDER if any(r["src"] == k for r in usable)]
     src_index = {k: i for i, k in enumerate(present)}
 
+    # The bins are still computed, and still decide the order paintings are
+    # written in -- a bin never splits a year, so this is a stable chronological
+    # grouping and the invariant is worth keeping. What is no longer *shipped*
+    # is the bins themselves.
+    #
+    # They were designed for a column layout the app has not used since it
+    # became a particle field: nothing in app/js ever read `bins` or the `b`
+    # index on a painting. Together that was 55 KB, 4.3% of the payload, sent to
+    # every visitor and parsed on every load to be ignored. Anything wanting a
+    # period axis can bin by year in the browser in one pass.
     bins = build_bins(usable)
     out_paintings = []
-    out_bins = []
-    for bin_idx, b in enumerate(bins):
-        start = len(out_paintings)
+    for b in bins:
         for rec in b["items"]:
             out_paintings.append({
                 "i": rec["id"],
@@ -291,11 +299,8 @@ def main():
                 "s": rec["yearStart"],
                 "e": rec["yearEnd"],
                 "n": nat_index.get(rec["_nat"], other_idx),
-                "b": bin_idx,
                 "k": rec["colors"],
             })
-        out_bins.append({"s": b["s"], "e": b["e"], "n": len(b["items"]),
-                         "p0": start, "p1": len(out_paintings)})
 
     total_cells = sum(len(p["k"]) for p in out_paintings)
     payload = {
@@ -310,8 +315,7 @@ def main():
                         for k in present],
             "totalPaintings": len(out_paintings),
             "totalCells": total_cells,
-            "bins": len(out_bins),
-            "yearRange": [out_bins[0]["s"], out_bins[-1]["e"]],
+            "yearRange": [bins[0]["s"], bins[-1]["e"]],
             "nationalities": vocab_out,
             "notes": {
                 "date": "year = midpoint of the catalogued begin/end date, span <= 25y",
@@ -328,7 +332,6 @@ def main():
                             "used as a proxy",
             },
         },
-        "bins": out_bins,
         "paintings": out_paintings,
     }
 
@@ -336,16 +339,17 @@ def main():
     C.OUT_JSON.write_text(json.dumps(payload, ensure_ascii=False, separators=(",", ":")))
     size_kb = C.OUT_JSON.stat().st_size / 1024
 
-    print(f"\nbins {len(out_bins)} | paintings {len(out_paintings)} | cells {total_cells}")
+    print(f"\nbins {len(bins)} (ordering only, not shipped) | "
+          f"paintings {len(out_paintings)} | cells {total_cells}")
     for key in present:
         n = sum(1 for r in usable if r["src"] == key)
         print(f"  {key:<5} {C.SOURCES[key]['short']:<24} {n:>6,}")
     print(f"wrote {C.OUT_JSON.relative_to(C.ROOT)}  {size_kb:.0f} KB")
     print(f"nationalities: {', '.join(vocab_out)}")
     print("\nbin spans:")
-    for i, b in enumerate(out_bins):
+    for i, b in enumerate(bins):
         span = b["e"] - b["s"]
-        print(f"  {i:>2}  {b['s']}-{b['e']}  ({span:>3}y)  n={b['n']}")
+        print(f"  {i:>2}  {b['s']}-{b['e']}  ({span:>3}y)  n={len(b['items'])}")
 
 
 if __name__ == "__main__":

@@ -37,14 +37,15 @@
 <header class="hud hud--top">
   <div class="hud__brand">
     <span class="hud__title">CHROMATICA</span>
-    <!-- What the thing is, in the two lines someone will actually read before
-         they start dragging. It describes the collection, not the mode; the
-         first line is filled from the data so the count can never go stale. -->
-    <span class="hud__blurb">
-      <span id="hudBlurbScope">EVERY COLOUR MEASURED IN FIVE OPEN-ACCESS COLLECTIONS.</span>
-      <span>PLACED BY WHEN IT WAS PAINTED AND HOW LIGHT IT IS.</span>
-    </span>
-    <span class="hud__sub" id="hudSub">CIE L*a*b* CHROMATIC PLANE · CLICK A PARTICLE FOR ITS PAINTING</span>
+    <!-- One line where there used to be three.
+         The two blurb lines and the sub-line were all permanent prose: they
+         described the collection and the current layout, never changed unless
+         you pressed something, and between them took a third of the bar. This
+         says the same things and one more — what you have narrowed to — and
+         every segment of it can be pressed to undo itself.
+         Filled entirely from JS (see paintScope), so the counts cannot go
+         stale and the empty state is never shown. -->
+    <div class="scope" id="scope" role="status" aria-live="polite"></div>
   </div>
   <dl class="readout">
     <div><dt>WORKS</dt><dd id="statWorks">—</dd></div>
@@ -98,11 +99,15 @@
       <select id="natFilter"><option value="-1">ALL</option></select>
     </div>
 
+    <!-- RESET used to live here. It is gone because the scope line above the
+         field now carries the same power in a form that also explains itself:
+         every narrowing is a chip you can press to lift, and one press clears
+         them all. A button that is permanently lit to undo a state you may not
+         be in was the interface admitting its state was hard to read. -->
     <div class="btns">
       <button id="btnLayout" title="Restack the same colours by hue instead of by year">CHROMATIC PLANE</button>
       <button id="btnTimelapse" aria-pressed="false" title="Move a window through time instead of showing the whole span">TIMELAPSE</button>
       <button id="btnPlay" class="is-vacant" title="Play or pause the timelapse">❚❚</button>
-      <button id="btnReset" title="Back to the whole collection">RESET</button>
       <button id="btnInfo" title="About">?</button>
     </div>
   </div>
