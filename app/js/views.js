@@ -42,6 +42,13 @@ export const VIEWS = {
        that does not use it is an invitation to type into nothing. */
     controls: [],
   },
+  compare: {
+    label: "COMPARE",
+    title: "Two schools side by side, measured against one fixed scale",
+    /* Its two selects are its own, inside the panel. The field's school filter
+       would be a third answer to a question the panel is already asking. */
+    controls: [],
+  },
   story: {
     label: "STORY",
     title: "Seven steps through what the field is showing",

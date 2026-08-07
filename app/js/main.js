@@ -77,6 +77,10 @@ const el = {
   detailLink: $("detailLink"), btnNear: $("btnNear"),
   detailEra: $("detailEra"), detailKin: $("detailKin"),
   detailKinLabel: $("detailKinLabel"), detailKinList: $("detailKinList"),
+  compare: $("compare"), compareClose: $("compareClose"),
+  compareA: $("compareA"), compareB: $("compareB"),
+  compareFiguresA: $("compareFiguresA"), compareFiguresB: $("compareFiguresB"),
+  compareNote: $("compareNote"), compareVerdict: $("compareVerdict"),
   story: $("story"), storyClose: $("storyClose"), storyCount: $("storyCount"),
   storyTitle: $("storyTitle"), storyText: $("storyText"),
   storyBack: $("storyBack"), storyNext: $("storyNext"), storyDots: $("storyDots"),
@@ -1321,6 +1325,9 @@ function bindInput() {
     if (button) setView(button.dataset.view);
   });
   el.tablesClose.addEventListener("click", () => setView("field"));
+  el.compareClose.addEventListener("click", () => setView("field"));
+  el.compareA.addEventListener("change", paintCompare);
+  el.compareB.addEventListener("change", paintCompare);
   el.tableBy.addEventListener("click", (event) => {
     const button = event.target.closest("[data-by]");
     if (!button) return;
@@ -1602,9 +1609,90 @@ function setStep(index) {
     + `aria-label="Step ${i + 1}"></button>`).join("");
 }
 
+/* ---------- two schools, one ruler ----------
+ *
+ * This was built once before as an overlay — both schools drawn on the same
+ * field at once, each with its own curve on the strip — and withdrawn, because
+ * two clouds in one space do not read as a comparison. They read as one filter
+ * or the other, and the only part that worked was the pair of curves.
+ *
+ * Beside each other they read. What makes that honest is already in the
+ * project: CHROMA_AXIS is fixed rather than rescaled per filter, so neither
+ * side can look saturated merely by being the more colourful of the two, and
+ * both bars mean the same thing at the same length.
+ *
+ * Schools only, not painters. Two painters at eight works each is a comparison
+ * of sampling noise; the question the data actually supports is about
+ * traditions.
+ */
+const COMPARE_AXIS = { chroma: CHROMA_AXIS, light: [20, 70] };
+const COMPARE_MIN_WORKS = 30;
+
+function paintCompare() {
+  const groups = state.stats.groups("school");
+  const find = (name) => groups.find((g) => g.key === name);
+  const a = find(el.compareA.value), b = find(el.compareB.value);
+  if (!a || !b) return;
+
+  const figures = (group, other) => {
+    const bar = (key, label) => {
+      const [lo, hi] = COMPARE_AXIS[key];
+      const width = clamp((group[key] - lo) / (hi - lo), 0, 1) * 100;
+      // The other side's position is marked on this side's bar, so the two can
+      // be compared without the eye travelling and having to remember.
+      const mark = clamp((other[key] - lo) / (hi - lo), 0, 1) * 100;
+      const lead = group[key] - other[key];
+      return `<div class="compare__bar"><span>${label}</span>`
+        + `<u><b style="width:${width.toFixed(1)}%"></b>`
+        + `<i style="left:${mark.toFixed(1)}%"></i></u>`
+        + `<em>${group[key].toFixed(1)}`
+        + `<s>${lead >= 0 ? "+" : "−"}${Math.abs(lead).toFixed(1)}</s></em></div>`;
+    };
+    return `<p class="compare__count">${num(group.works)} WORKS · `
+      + `${span(group.from, group.to)}</p>` + bar("chroma", "COLOUR") + bar("light", "LIGHT");
+  };
+
+  el.compareFiguresA.innerHTML = figures(a, b);
+  el.compareFiguresB.innerHTML = figures(b, a);
+
+  /* The one sentence the numbers add up to. Written out rather than left to
+     the reader, because the whole reason the overlay failed was that it put
+     two things on screen and said nothing about them. */
+  const gap = a.chroma - b.chroma;
+  const [more, less] = gap >= 0 ? [a, b] : [b, a];
+  el.compareVerdict.innerHTML = Math.abs(gap) < 0.5
+    ? `<b>${escapeHtml(a.label)}</b> and <b>${escapeHtml(b.label)}</b> painting sit at `
+      + "almost exactly the same distance from grey."
+    : `<b>${escapeHtml(more.label)}</b> painting sits <b>${Math.abs(gap).toFixed(1)}</b> `
+      + `further from grey than <b>${escapeHtml(less.label)}</b> — `
+      + `${Math.round(Math.abs(gap) / less.chroma * 100)}% more chroma, on the same scale.`;
+}
+
+function fillCompare() {
+  const groups = state.stats.groups("school")
+    .filter((g) => g.works >= COMPARE_MIN_WORKS && g.key !== "Other / unattributed")
+    .sort((x, y) => y.works - x.works);
+  const options = groups.map((g) =>
+    `<option value="${escapeHtml(g.key)}">${escapeHtml(g.label)} (${num(g.works)})</option>`)
+    .join("");
+  el.compareA.innerHTML = options;
+  el.compareB.innerHTML = options;
+  // Opens on the comparison the data most invites: the Dutch are the lowest
+  // chroma of any school here and the Italians among the highest — the Baroque
+  // argument and the medieval one in a single picture.
+  const has = (key) => groups.some((g) => g.key === key);
+  el.compareA.value = has("Dutch") ? "Dutch" : groups[0].key;
+  el.compareB.value = has("Italian") ? "Italian" : groups[1]?.key ?? groups[0].key;
+  el.compareNote.textContent =
+    "Both bars are drawn against one fixed scale — the same ruler the curve "
+    + "under the field uses — so neither side can look saturated merely by being "
+    + "the more colourful of the two. The mark on each bar is where the other "
+    + "school falls.";
+}
+
 /* ---------- the readings ----------
  *
- * One question at the top, three answers, and choosing one recomposes the
+ * One question at the top, four answers, and choosing one recomposes the
  * footer so only its own controls are live.
  *
  * This is not a mode system in the usual sense, and the difference matters:
@@ -1619,6 +1707,7 @@ function setView(next, { fromURL = false } = {}) {
 
   el.tables.hidden = view !== "tables";
   el.story.hidden = view !== "story";
+  el.compare.hidden = view !== "compare";
   el.about.hidden = true;
 
   for (const button of el.views.children) {
@@ -1629,6 +1718,10 @@ function setView(next, { fromURL = false } = {}) {
   if (view === "tables") {
     hideDetail();
     paintTables();
+  }
+  if (view === "compare") {
+    hideDetail();
+    paintCompare();
   }
   if (view === "story") {
     spendHint();
@@ -1925,6 +2018,7 @@ async function compose(data) {
   el.timeline.setAttribute("aria-valuemax", state.field.y1);
   fillAbout(data.meta);
   fillFilter(data);
+  fillCompare();
   measure();
   measureFoot();
   bindInput();

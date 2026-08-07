@@ -58,6 +58,7 @@
     <button data-view="field" aria-pressed="true">FIELD</button>
     <button data-view="tables" aria-pressed="false">TABLES</button>
     <button data-view="story" aria-pressed="false">STORY</button>
+    <button data-view="compare" aria-pressed="false">COMPARE</button>
   </nav>
 
   <div class="hud__right">
@@ -233,6 +234,32 @@
      an argument about a picture. What stays here is the part a walk cannot
      carry and a reader may genuinely need to check: how the numbers were
      made, and who to credit. -->
+<!-- Two schools, side by side, against one ruler.
+     This was built once before as an overlay — both schools on the same field
+     at once — and withdrawn, because two clouds in one space do not read as a
+     comparison, they read as one filter or the other. Beside each other they
+     do. What makes it work at all is that CHROMA_AXIS is fixed rather than
+     rescaled per filter, so neither side can look saturated merely by being
+     the more colourful of the two. -->
+<aside class="panel panel--compare" id="compare" hidden>
+  <button class="panel__close" id="compareClose" aria-label="Close">×</button>
+  <div class="compare__body">
+    <h2>TWO SCHOOLS, ONE RULER</h2>
+    <p class="compare__note" id="compareNote"></p>
+    <div class="compare__pair">
+      <section>
+        <select id="compareA" aria-label="First school"></select>
+        <div class="compare__figures" id="compareFiguresA"></div>
+      </section>
+      <section>
+        <select id="compareB" aria-label="Second school"></select>
+        <div class="compare__figures" id="compareFiguresB"></div>
+      </section>
+    </div>
+    <div class="compare__verdict" id="compareVerdict"></div>
+  </div>
+</aside>
+
 <aside class="panel panel--about" id="about" hidden>
   <button class="panel__close" id="aboutClose" aria-label="Close">×</button>
   <div class="about__body">

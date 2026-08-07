@@ -96,10 +96,11 @@ ciò che serve agli aggregati.
 - [x] **5.2** Il footer si ricompone per modalità.
 - [x] **5.3** La modalità entra nella URL come le altre variabili di stato.
 
-### Fase 6 — CONFRONTO
-- [ ] **6.1** Due campi affiancati, non sovrapposti — la forma sovrapposta è già
+### Fase 6 — CONFRONTO ✅
+*Fatta il 2026-08-08. 110 test verdi (50 JS, 60 Python).*
+- [x] **6.1** Due campi affiancati, non sovrapposti — la forma sovrapposta è già
       stata provata e ritirata perché leggeva come un filtro o l'altro.
-- [ ] **6.2** Scala condivisa: `CHROMA_AXIS` è già fisso, quindi i due lati sono
+- [x] **6.2** Scala condivisa: `CHROMA_AXIS` è già fisso, quindi i due lati sono
       già confrontabili.
 
 ---

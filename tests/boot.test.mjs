@@ -364,6 +364,30 @@ test("a reading recomposes the footer and leaves the field where it was", async 
     "losing the view to the story should be announced");
 });
 
+test("compare puts two schools against one ruler and says what it found", async () => {
+  const app = await boot();
+  app.view("compare");
+  assert.equal(app.byId.get("compare").hidden, false);
+
+  const a = app.text("compareFiguresA");
+  assert.match(a, /WORKS/, "each side should say how many works it rests on");
+  assert.match(a, /COLOUR/, "each side should show chroma");
+  // The mark showing where the *other* school falls is the whole mechanism by
+  // which two columns become one comparison.
+  assert.match(a, /class="compare__bar"/);
+  assert.match(app.text("compareVerdict"), /grey/,
+    "the panel should state what the two numbers add up to");
+
+  // Switching a side recomputes both, because each bar carries the other's mark.
+  const before = app.text("compareFiguresB");
+  const select = app.byId.get("compareB");
+  const other = [...select.innerHTML.matchAll(/value="([^"]+)"/g)]
+    .map((m) => m[1]).find((v) => v !== select.value);
+  select.value = other;
+  app.fire("compareB", "change");
+  assert.notEqual(app.text("compareFiguresB"), before, "the second side should change");
+});
+
 test("the opening hint is spent by the first touch of the field", async () => {
   const app = await boot();
   const hint = app.byId.get("hint");

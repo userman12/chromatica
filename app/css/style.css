@@ -635,6 +635,51 @@ button[aria-pressed="true"] {
   background: var(--accent); opacity: .5;
 }
 
+/* ---------- two schools, one ruler ---------- */
+.panel--compare {
+  right: 50%; bottom: 50%; transform: translate(50%, 50%);
+  width: 620px; max-height: 82vh; overflow-y: auto;
+}
+.compare__body { padding: 16px 18px 18px; }
+.compare__body h2 { letter-spacing: .2em; margin: 0 0 10px; font-size: 12px; }
+.compare__note {
+  font-size: 9px; line-height: 1.65; color: #575e59; margin: 0 0 14px;
+}
+.compare__pair { display: flex; gap: 22px; }
+.compare__pair section { flex: 1 1 0; min-width: 0; }
+.compare__pair select { width: 100%; margin-bottom: 9px; }
+.compare__count {
+  font-size: 8px; letter-spacing: .12em; color: #4a504c; margin: 0 0 9px;
+}
+.compare__bar { margin-bottom: 9px; }
+.compare__bar span {
+  display: block; font-size: 8px; letter-spacing: .14em; color: #4a504c;
+  margin-bottom: 3px;
+}
+.compare__bar u {
+  position: relative; display: block; height: 5px;
+  background: #171717; text-decoration: none;
+}
+.compare__bar b { display: block; height: 100%; background: var(--accent); opacity: .55; }
+/* Where the *other* school falls, marked on this school's bar, so the two are
+   compared without the eye travelling between columns and remembering. */
+.compare__bar i {
+  position: absolute; top: -2px; width: 1px; height: 9px;
+  background: var(--text-bright);
+}
+.compare__bar em {
+  display: block; margin-top: 4px; font-style: normal;
+  font-size: 11px; color: var(--text-bright); font-variant-numeric: tabular-nums;
+}
+.compare__bar s { text-decoration: none; font-size: 9px; color: #575e59; margin-left: 7px; }
+/* The sentence the numbers add up to. The overlay this replaces put two things
+   on screen and said nothing about them, which is why it failed. */
+.compare__verdict {
+  margin-top: 14px; padding-top: 12px; border-top: 1px solid #1c1c1c;
+  font-size: 10px; line-height: 1.7; color: #9aa39d;
+}
+.compare__verdict b { color: var(--text-bright); font-weight: 500; }
+
 .about__body { padding: 16px 18px 18px; }
 /* The hand-off. Inline in the paragraph rather than a control in a row of its
    own, because it is the sentence continuing, not a fifth thing to choose. */
