@@ -76,9 +76,16 @@ function makeEl(id = "", tag = "div") {
 async function boot() {
   const byId = new Map();
   const html = readFileSync(join(APP, "index.html"), "utf8");
-  // Only the ids the real markup defines, so a lookup for something that is
-  // not there comes back null exactly as it would in a browser.
-  for (const m of html.matchAll(/\bid="([^"]+)"/g)) byId.set(m[1], makeEl(m[1]));
+  /* Only the ids the real markup defines, so a lookup for something that is
+     not there comes back null exactly as it would in a browser — and with the
+     `hidden` attribute honoured, because several panels start closed and code
+     that toggles one reads its current state to decide which way to go. A stub
+     that reports every panel as open makes "open the tables" close them. */
+  for (const tag of html.matchAll(/<[a-z][^>]*\bid="([^"]+)"[^>]*>/g)) {
+    const node = makeEl(tag[1]);
+    node.hidden = /\shidden(\s|>|=)/.test(tag[0]);
+    byId.set(tag[1], node);
+  }
 
   const windowListeners = new Map();
   globalThis.document = {
@@ -210,6 +217,43 @@ test("the scope line answers every one of its chips", async () => {
   // Everything lifted: the line goes back to stating the size of the whole.
   assert.ok(app.text("scope").includes("PAINTINGS"),
     "with nothing narrowed the line should state the collection");
+});
+
+test("the tables open, switch, and lead back into the field", async () => {
+  const app = await boot();
+  app.click("btnTables");
+  assert.equal(app.byId.get("tables").hidden, false, "the panel should open");
+
+  const high = app.text("tableHigh");
+  assert.ok(high.includes("WORKS"), "rows should state how many works they rest on");
+  assert.ok(high.includes("data-key"), "painter rows should lead somewhere");
+
+  // Switching measure and grouping must not throw and must rewrite the tables.
+  for (const [id, sel, key] of [
+    ["tableMeasure", "[data-measure]", "light"],
+    ["tableBy", "[data-by]", "school"],
+    ["tableBy", "[data-by]", "source"],
+  ]) {
+    app.fire(id, "click", {
+      target: { closest: (s) => (s === sel ? { dataset: { measure: key, by: key } } : null) },
+    });
+  }
+  // A museum leads nowhere -- the field has no filter for which collection a
+  // work came from -- so those rows must not pretend to be pressable.
+  assert.ok(!app.text("tableHigh").includes("data-key"),
+    "museum rows should not be buttons");
+
+  // Back to painters, then walk into the field through a row.
+  app.fire("tableBy", "click", {
+    target: { closest: (s) => (s === "[data-by]" ? { dataset: { by: "artist" } } : null) },
+  });
+  app.fire("tables", "click", {
+    target: { closest: (s) => (s === "li [data-key]" ? { dataset: { key: "Claude Monet" } } : null) },
+  });
+  assert.equal(app.byId.get("tables").hidden, true, "the panel should close behind you");
+  app.frame();
+  assert.ok(app.text("scope").includes("Claude Monet"),
+    "the field should now be narrowed to the row that was pressed");
 });
 
 test("the opening hint is spent by the first touch of the field", async () => {

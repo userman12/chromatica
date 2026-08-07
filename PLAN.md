@@ -61,12 +61,13 @@ ciò che serve agli aggregati.
 - [x] **1.8** Togliere i 97 bin morti dal payload: mai letti dal frontend,
       55 KB, 4,3% del JSON. Richiede stadio 4 + ricostruzione.
 
-### Fase 2 — `stats.js` e CLASSIFICHE
-- [ ] **2.1** Modulo `stats.js` con gli aggregati e i percentili.
-- [ ] **2.2** Vista classifiche: artisti, scuole, musei; per chroma e per
+### Fase 2 — `stats.js` e CLASSIFICHE ✅
+*Fatta il 2026-08-07. 101 test verdi (41 JS, 60 Python).*
+- [x] **2.1** Modulo `stats.js` con gli aggregati e i percentili.
+- [x] **2.2** Vista classifiche: artisti, scuole, musei; per chroma e per
       lightness; soglia minima di opere perché una classifica su 2 opere non è
       una classifica.
-- [ ] **2.3** Ogni riga riporta al CAMPO filtrato: le classifiche sono la porta
+- [x] **2.3** Ogni riga riporta al CAMPO filtrato: le classifiche sono la porta
       d'ingresso che oggi manca, non un vicolo cieco.
 
 ### Fase 3 — SCHEDA arricchita

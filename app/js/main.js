@@ -20,6 +20,7 @@
  */
 import { Field, CHROMA_AXIS } from "./field.js";
 import { Nebula } from "./nebula.js";
+import { Stats, RANK_MIN_WORKS } from "./stats.js";
 import { perf } from "./perf.js";
 
 const PLAY_YEARS_PER_SEC = 7.5;   // the timelapse crawl
@@ -52,7 +53,12 @@ const el = {
   natFilter: $("natFilter"),
   search: $("search"), searchCount: $("searchCount"), searchList: $("searchList"),
   btnTimelapse: $("btnTimelapse"), btnPlay: $("btnPlay"),
-  btnInfo: $("btnInfo"), foot: $("foot"),
+  btnInfo: $("btnInfo"), btnTables: $("btnTables"), foot: $("foot"),
+  tables: $("tables"), tablesClose: $("tablesClose"),
+  tableBy: $("tableBy"), tableMeasure: $("tableMeasure"),
+  tableHigh: $("tableHigh"), tableLow: $("tableLow"),
+  tablesNote: $("tablesNote"),
+  tablesHighLabel: $("tablesHighLabel"), tablesLowLabel: $("tablesLowLabel"),
   timeline: $("timelineCanvas"), timelineLabel: $("timelineLabel"),
   markChip: $("markChip"),
   about: $("about"), aboutClose: $("aboutClose"),
@@ -68,7 +74,9 @@ const el = {
 const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
 const state = {
-  data: null, field: null,
+  data: null, field: null, stats: null,
+  tableBy: "artist",     // what the tables group by
+  tableMeasure: "chroma",
   mode: "all",        // "all" = the whole span at once, "time" = the timelapse
   chrono: true,       // layout: true = year × lightness, false = the a* and b* plane
   playing: false,
@@ -1254,13 +1262,42 @@ function bindInput() {
     if (state.selected < 0) return;
     if (state.near === state.selected) clearNear(); else setNear(state.selected);
   });
-  el.btnInfo.addEventListener("click", () => { el.about.hidden = false; });
+  /* --- the tables --- */
+  el.btnTables.addEventListener("click", () => showTables(el.tables.hidden));
+  el.tablesClose.addEventListener("click", () => showTables(false));
+  el.tableBy.addEventListener("click", (event) => {
+    const button = event.target.closest("[data-by]");
+    if (!button) return;
+    state.tableBy = button.dataset.by;
+    paintTables();
+  });
+  el.tableMeasure.addEventListener("click", (event) => {
+    const button = event.target.closest("[data-measure]");
+    if (!button) return;
+    state.tableMeasure = button.dataset.measure;
+    paintTables();
+  });
+  // One listener over both tables: they are rewritten on every switch.
+  el.tables.addEventListener("click", (event) => {
+    const row = event.target.closest("li [data-key]");
+    if (row) enterFromTable(row.dataset.key);
+  });
+
+  el.btnInfo.addEventListener("click", () => {
+    el.about.hidden = false;
+    showTables(false);
+  });
   el.aboutClose.addEventListener("click", () => { el.about.hidden = true; });
   el.detailClose.addEventListener("click", hideDetail);
 
   /* --- keyboard --- */
   window.addEventListener("keydown", (event) => {
-    if (event.key === "Escape") { hideDetail(); el.about.hidden = true; return; }
+    if (event.key === "Escape") {
+      hideDetail();
+      el.about.hidden = true;
+      showTables(false);
+      return;
+    }
     if (event.target === el.search) return;   // space and arrows belong to the box
     if (event.key === " " && state.mode === "time") {
       event.preventDefault(); setPlaying(!state.playing); return;
@@ -1327,6 +1364,126 @@ function showChip(px, py) {
 function hideChip() {
   el.hoverchip.hidden = true;
   state.hover = -1;
+}
+
+/* ---------- the tables ----------
+ *
+ * The field shows every colour and argues nothing. The chroma curve under it
+ * argues one thing about the whole collection at once. These are the layer
+ * between: the same measurements, grouped by the things a person actually asks
+ * about, and ranked.
+ *
+ * They also fix something the field never did. Six centuries of colour against
+ * black is a superb thing to explore and a hard thing to *enter*: with no name
+ * in your head there is nowhere to click first. A table is a list of names,
+ * every one of which leads back into the field — so it is a door, not a
+ * detour. That is why each row narrows the field and closes the panel rather
+ * than opening some second reading of its own.
+ *
+ * What the top of the chroma table says is the whole argument of the piece,
+ * stated in names rather than as a curve: the most colourful painters here are
+ * fourteenth-century Sienese and Florentines, and the collection has never
+ * been that saturated since.
+ */
+const TABLE_ROWS = 12;
+
+const MEASURE = {
+  chroma: {
+    label: "CHROMA", high: "MOST COLOUR", low: "LEAST COLOUR",
+    // Not the group's own range: a bar has to be read against a fixed ruler or
+    // two tables cannot be compared. This is CHROMA_AXIS, the same one the
+    // strip under the field draws both curves against.
+    axis: CHROMA_AXIS,
+    note: "How far a colour sits from grey — √(a*² + b*²) in CIE L*a*b*, "
+      + "averaged over every measured colour of every work.",
+  },
+  light: {
+    label: "LIGHTNESS", high: "LIGHTEST", low: "DARKEST",
+    axis: [20, 70],
+    note: "L*, where a colour sits between black and white, averaged over "
+      + "every measured colour of every work.",
+  },
+};
+
+const BY = {
+  artist: { label: "PAINTERS", floor: `AT LEAST ${RANK_MIN_WORKS} WORKS` },
+  school: { label: "SCHOOLS", floor: "" },
+  source: { label: "MUSEUMS", floor: "" },
+};
+
+function paintTables() {
+  const measure = MEASURE[state.tableMeasure];
+  const by = BY[state.tableBy];
+  const [lo, hi] = measure.axis;
+
+  /* A row is a button only when pressing it leads somewhere. Painters and
+     schools both narrow the field; a museum does not, because the field has no
+     filter for which collection a work came from and inventing one here would
+     be a control that exists in a table and nowhere else. Those rows are a
+     reading, and they are drawn as one — no pointer, no press. */
+  const leadsBack = state.tableBy !== "source";
+  const row = (group, place) => {
+    const value = group[state.tableMeasure];
+    const width = clamp((value - lo) / (hi - lo), 0, 1) * 100;
+    const inner =
+      `<em>${place}</em>`
+      + `<span class="tables__name">${escapeHtml(group.label)}`
+      + `<i>${num(group.works)} WORKS · ${span(group.from, group.to)}</i></span>`
+      + `<b>${value.toFixed(1)}</b>`
+      + `<u style="width:${width.toFixed(1)}%"></u>`;
+    return leadsBack
+      ? `<li><button type="button" data-key="${escapeHtml(group.key)}">${inner}</button></li>`
+      : `<li><span class="tables__row">${inner}</span></li>`;
+  };
+
+  const fill = (node, end) => {
+    const rows = state.stats.ranking(state.tableBy, state.tableMeasure, end, TABLE_ROWS);
+    node.innerHTML = rows.map((g, i) => row(g, i + 1)).join("");
+  };
+  fill(el.tableHigh, "high");
+  fill(el.tableLow, "low");
+
+  el.tablesHighLabel.textContent = measure.high;
+  el.tablesLowLabel.textContent = measure.low;
+  el.tablesNote.textContent = measure.note
+    + (by.floor ? ` Painters with fewer than ${RANK_MIN_WORKS} works are left out: `
+      + "a handful of paintings is not a tendency." : "");
+
+  for (const button of el.tableBy.children) {
+    button.setAttribute("aria-pressed", String(button.dataset.by === state.tableBy));
+  }
+  for (const button of el.tableMeasure.children) {
+    button.setAttribute("aria-pressed",
+      String(button.dataset.measure === state.tableMeasure));
+  }
+}
+
+function showTables(on) {
+  el.tables.hidden = !on;
+  el.btnTables.setAttribute("aria-pressed", String(on));
+  if (on) {
+    hideDetail();
+    el.about.hidden = true;
+    paintTables();
+  }
+}
+
+/** A row was pressed: narrow the field to it and get out of the way. */
+function enterFromTable(key) {
+  if (state.tableBy === "school") {
+    const index = state.data.meta.nationalities.indexOf(key);
+    if (index < 0) return;
+    setSchools(index);
+    setQuery("");
+  } else {
+    // The search dims rather than filters, which is exactly right here: it
+    // shows where this painter sits *inside* the collection rather than
+    // deleting the rest, and the rings and the named list come free.
+    setSchools(-1);
+    setQuery(key);
+  }
+  showTables(false);
+  spendHint();
 }
 
 /* ---------- the second layer ---------- */
@@ -1522,6 +1679,10 @@ async function compose(data) {
     + `${num(data.meta.totalCells)} extracted colours`);
 
   state.field = new Field(data);
+  // Built on the field rather than on the raw data: field.js has already
+  // converted every colour to Lab, and doing it twice would be both slower and
+  // a second place for the conversion to drift.
+  state.stats = new Stats(data, state.field);
   state.cursor = state.field.y0;
   boot(`> ${num(state.field.n)} particles measured in CIE L*a*b*`);
   boot("> layout: year × lightness");

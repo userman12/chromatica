@@ -108,6 +108,7 @@
       <button id="btnLayout" title="Restack the same colours by hue instead of by year">CHROMATIC PLANE</button>
       <button id="btnTimelapse" aria-pressed="false" title="Move a window through time instead of showing the whole span">TIMELAPSE</button>
       <button id="btnPlay" class="is-vacant" title="Play or pause the timelapse">❚❚</button>
+      <button id="btnTables" aria-pressed="false" title="Rank painters, schools and museums by the measurements">TABLES</button>
       <button id="btnInfo" title="About">?</button>
     </div>
   </div>
@@ -144,6 +145,35 @@
         <div><dt>PALETTE</dt><dd id="detailPalette"></dd></div>
       </dl>
       <a id="detailLink" href="#" target="_blank" rel="noopener">OPEN IN THE CATALOGUE ↗</a>
+    </div>
+  </div>
+</aside>
+
+<!-- Tables, from the same measurements the field is drawn from.
+     The field shows every colour and argues nothing; the chroma curve argues
+     one thing about the whole collection. This is the layer between: the same
+     numbers grouped by the things people actually ask about — a painter, a
+     school, a museum — and ranked. It is also the way in for someone who does
+     not yet know what to look for, which the field alone never offered. -->
+<aside class="panel panel--tables" id="tables" hidden>
+  <button class="panel__close" id="tablesClose" aria-label="Close">×</button>
+  <div class="tables__body">
+    <h2>WHAT THE MEASUREMENTS ADD UP TO</h2>
+    <div class="tables__controls">
+      <div class="seg" id="tableBy" role="group" aria-label="Group by">
+        <button data-by="artist" aria-pressed="true">PAINTERS</button>
+        <button data-by="school" aria-pressed="false">SCHOOLS</button>
+        <button data-by="source" aria-pressed="false">MUSEUMS</button>
+      </div>
+      <div class="seg" id="tableMeasure" role="group" aria-label="Measure">
+        <button data-measure="chroma" aria-pressed="true">CHROMA</button>
+        <button data-measure="light" aria-pressed="false">LIGHTNESS</button>
+      </div>
+    </div>
+    <p class="tables__note" id="tablesNote"></p>
+    <div class="tables__pair">
+      <section><h3 id="tablesHighLabel">HIGHEST</h3><ol id="tableHigh"></ol></section>
+      <section><h3 id="tablesLowLabel">LOWEST</h3><ol id="tableLow"></ol></section>
     </div>
   </div>
 </aside>

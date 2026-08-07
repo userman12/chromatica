@@ -445,6 +445,75 @@ button[aria-pressed="true"] {
 }
 .panel a:hover { border-bottom-color: var(--accent); }
 
+/* ---------- the tables ----------
+   Two columns, because a ranking of one end is half an argument: the most
+   colourful painters mean something next to the least, and not otherwise. */
+.panel--tables {
+  right: 50%; bottom: 50%; transform: translate(50%, 50%);
+  width: 720px; max-height: 82vh; overflow-y: auto;
+}
+.tables__body { padding: 16px 18px 18px; }
+.tables__body h2 {
+  letter-spacing: .2em; margin: 0 0 12px; font-size: 12px;
+}
+.tables__controls { display: flex; gap: 14px; flex-wrap: wrap; margin-bottom: 10px; }
+/* A segmented control rather than five loose buttons: these are two questions
+   with a few answers each, and the shape should say which answers belong to
+   which question. */
+.seg { display: flex; }
+.seg button {
+  border-radius: 0; margin-left: -1px; font-size: 9px; padding: 4px 9px;
+}
+.seg button:first-child { margin-left: 0; }
+.tables__note {
+  font-size: 9px; line-height: 1.65; color: #575e59;
+  margin: 0 0 14px; max-width: 76ch;
+}
+.tables__pair { display: flex; gap: 22px; }
+.tables__pair section { flex: 1 1 0; min-width: 0; }
+.tables__pair h3 {
+  font-size: 8px; letter-spacing: .18em; color: var(--accent);
+  margin: 0 0 7px; font-weight: 400;
+}
+.tables__pair ol { list-style: none; margin: 0; padding: 0; }
+.tables__pair li { border-bottom: 1px solid #ffffff0d; }
+.tables__pair li:last-child { border-bottom: none; }
+
+/* One row, whether it is a button or not: a museum row leads nowhere, so it is
+   not a button, but it must line up with the painter rows exactly. */
+.tables__pair li > button,
+.tables__row {
+  position: relative; display: grid; width: 100%;
+  grid-template-columns: 18px 1fr auto; gap: 8px; align-items: baseline;
+  background: none; border: none; border-radius: 0;
+  padding: 5px 6px; min-width: 0; text-align: left;
+  font-family: var(--mono); letter-spacing: normal; color: var(--text);
+}
+.tables__pair li > button { cursor: pointer; }
+.tables__pair li > button:hover { background: var(--accent-dim); color: var(--text); border: none; }
+.tables__pair li > button:focus-visible { outline: 1px solid var(--accent); outline-offset: -2px; }
+.tables__pair em {
+  font-style: normal; font-size: 9px; color: #3c423e; text-align: right;
+}
+.tables__name { color: var(--text-bright); font-size: 10px; line-height: 1.4; min-width: 0; }
+.tables__name i {
+  display: block; font-style: normal; font-size: 8px;
+  letter-spacing: .1em; color: #575e59;
+}
+.tables__pair b {
+  color: var(--accent); font-weight: 500; font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+/* The bar is drawn against a fixed axis, not the table's own range — the same
+   ruler the chroma curve under the field uses — so two tables can be compared
+   and a school cannot look saturated merely by being top of a dull list.
+   Under the row rather than beside it: the number is the measurement, and the
+   bar is only there so the eye can rank without reading. */
+.tables__pair u {
+  position: absolute; left: 0; bottom: 0; height: 1px;
+  background: var(--accent); opacity: .5;
+}
+
 .about__body { padding: 16px 18px 18px; }
 .about__body h2 { letter-spacing: .28em; margin-bottom: 10px; }
 .about__body h3 {
