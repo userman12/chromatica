@@ -430,8 +430,58 @@ button[aria-pressed="true"] {
    provenance. Full width: it is the only control in this panel and there is
    nothing for it to line up beside. */
 .panel__near {
-  display: block; width: 100%; margin: 0 0 13px;
+  display: flex; align-items: center; justify-content: center; gap: 7px;
+  width: 100%; margin: 0 0 13px;
   font-size: 9px; letter-spacing: .14em; padding: 6px 10px;
+}
+/* The colour it would ask about, on the button that asks. The same pairing the
+   swatches above it use, so the marked swatch and this read as one gesture. */
+.panel__near i { width: 16px; height: 10px; flex: 0 0 16px; display: block; }
+
+/* ---------- this work in its own time ----------
+   A percentile drawn as a position in a distribution, because that is what a
+   percentile is. The track is the era; the tick is this painting. */
+.era { margin: 0 0 13px; }
+.era h3, .kin h3 {
+  font-size: 8px; letter-spacing: .18em; color: var(--accent);
+  margin: 0 0 7px; font-weight: 400;
+}
+.era__row {
+  display: grid; grid-template-columns: 38px 54px 1fr; gap: 8px;
+  align-items: center; margin-bottom: 4px;
+}
+.era__row span { font-size: 8px; letter-spacing: .14em; color: #4a504c; }
+.era__row u {
+  position: relative; display: block; height: 3px;
+  background: #1c1c1c; text-decoration: none;
+}
+.era__row u i {
+  position: absolute; top: -2px; width: 1px; height: 7px;
+  background: var(--accent);
+}
+.era__row b { font-size: 9px; font-weight: 400; color: var(--text-bright); letter-spacing: .05em; }
+.era__basis {
+  display: block; font-style: normal; font-size: 8px;
+  letter-spacing: .1em; color: #3c423e; margin-top: 5px;
+}
+
+/* ---------- the other works by this hand ---------- */
+.kin { margin: 13px 0 0; padding-top: 12px; border-top: 1px solid #1c1c1c; }
+.kin ul {
+  list-style: none; margin: 0; padding: 0;
+  display: flex; gap: 5px; overflow-x: auto;
+}
+.kin li { flex: 0 0 auto; }
+.kin button {
+  display: block; padding: 0; border: 1px solid #232323; background: #141414;
+  cursor: pointer; min-width: 0; line-height: 0;
+}
+.kin button:hover { border-color: var(--accent); }
+.kin button:focus-visible { outline: 1px solid var(--accent); outline-offset: 1px; }
+.kin img { display: block; width: 46px; height: 46px; object-fit: cover; }
+.kin i {
+  display: block; font-style: normal; font-size: 8px; line-height: 1.6;
+  letter-spacing: .06em; color: #575e59; text-align: center;
 }
 
 .panel__rows { margin: 0 0 13px; display: grid; gap: 3px; }

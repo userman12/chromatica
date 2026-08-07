@@ -70,12 +70,13 @@ ciò che serve agli aggregati.
 - [x] **2.3** Ogni riga riporta al CAMPO filtrato: le classifiche sono la porta
       d'ingresso che oggi manca, non un vicolo cieco.
 
-### Fase 3 — SCHEDA arricchita
-- [ ] **3.1** Posizione dell'opera rispetto ai suoi contemporanei (percentile di
+### Fase 3 — SCHEDA arricchita ✅
+*Fatta il 2026-08-08. 102 test verdi (42 JS, 60 Python).*
+- [x] **3.1** Posizione dell'opera rispetto ai suoi contemporanei (percentile di
       chroma e di lightness nel suo trentennio).
-- [ ] **3.2** Altre opere dello stesso artista — possibile solo dopo la
+- [x] **3.2** Altre opere dello stesso artista — possibile solo dopo la
       canonicalizzazione dei nomi; riguarda l'83% delle opere.
-- [ ] **3.3** I colori simili resi visibili invece che nascosti dietro un bottone.
+- [x] **3.3** I colori simili resi visibili invece che nascosti dietro un bottone.
 
 ### Fase 4 — menù di modalità e ricomposizione del footer
 - [ ] **4.1** Il selettore in alto al centro.

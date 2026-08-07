@@ -69,6 +69,8 @@ const el = {
   detailSource: $("detailSource"), aboutSources: $("aboutSources"),
   detailPalette: $("detailPalette"), detailSwatches: $("detailSwatches"),
   detailLink: $("detailLink"), btnNear: $("btnNear"),
+  detailEra: $("detailEra"), detailKin: $("detailKin"),
+  detailKinLabel: $("detailKinLabel"), detailKinList: $("detailKinList"),
 };
 
 const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -710,8 +712,19 @@ function clearNear() {
    there — which is a different question and must not look like the one already
    running. */
 function paintNear() {
-  el.btnNear.setAttribute("aria-pressed",
-    String(state.near >= 0 && state.near === state.selected));
+  const running = state.near >= 0 && state.near === state.selected;
+  el.btnNear.setAttribute("aria-pressed", String(running));
+  /* The button used to say the same eight words whatever was selected, which
+     made the best question in the piece look like a generic control. It names
+     the colour it would actually ask about — the one marked in the swatches
+     directly above it — so the swatch, the button and the answer's header all
+     say the same thing and read as one gesture. */
+  const hex = state.selected >= 0 ? state.field.css[state.selected] : null;
+  el.btnNear.innerHTML = running
+    ? "STOP · SHOWING COLOURS LIKE THIS"
+    : hex
+      ? `<i style="background:${hex}"></i>FIND COLOURS LIKE ${hex.toUpperCase()}`
+      : "COLOURS LIKE THIS ONE";
 }
 
 /** Is anything being asked of the field at all — by name, or by colour. */
@@ -1235,6 +1248,13 @@ function bindInput() {
     state.preview = -1;
     state.marks = true;
   });
+  /* A sibling thumbnail opens that painting, in the same panel, which is what
+     makes the strip a way of walking an artist rather than a decoration. */
+  el.detail.addEventListener("click", (event) => {
+    const thumb = event.target.closest("[data-kin]");
+    if (!thumb) return;
+    showDetail(state.stats.firstParticle[+thumb.dataset.kin]);
+  });
   el.searchList.addEventListener("click", (event) => {
     if (event.target.closest(".findlist__x")) { clearNear(); return; }
     const row = event.target.closest("li[data-k]");
@@ -1586,7 +1606,79 @@ async function fillDetail(particle) {
     + `<code>${h.toUpperCase()}</code></li>`).join("");
   el.detailLink.href = src.url.replace("{}", encodeURIComponent(p.i));
   el.detailLink.textContent = `OPEN AT ${src.short} ↗`;
+  paintEra(F.owner[particle]);
+  paintKin(F.owner[particle]);
   el.detail.hidden = false;
+}
+
+/* Where this work sits among the paintings of its own time.
+ *
+ * The panel could already tell you a work's chroma to one decimal place, and
+ * the number meant nothing: nobody has a feel for 14.2. The same measurement
+ * said as a position — more muted than seven in ten of what was painted around
+ * it — is a fact you can hold, and it is the fact the field is showing
+ * visually anyway. This only says it in words, for one painting.
+ *
+ * Shown as a bar rather than a percentage alone because the claim is about
+ * where it falls in a distribution, and a bar is a distribution. Dropped
+ * entirely when the era is too thin to quote: a percentile off nine paintings
+ * is one of ten values dressed up as a measurement.
+ */
+function paintEra(index) {
+  const era = state.stats.era(index);
+  if (!era) { el.detailEra.hidden = true; return; }
+
+  const line = (label, place, low, high) => {
+    const percent = Math.round(place * 100);
+    // Said from whichever end is the shorter statement: "in the top 8%" beats
+    // "more colourful than 92%", and both are the same number.
+    const words = percent >= 50
+      ? `${high} THAN ${percent}% OF ITS TIME`
+      : `${low} THAN ${100 - percent}% OF ITS TIME`;
+    return `<div class="era__row"><span>${label}</span>`
+      + `<u><i style="left:${clamp(place, 0, 1) * 100}%"></i></u>`
+      + `<b>${words}</b></div>`;
+  };
+
+  el.detailEra.innerHTML =
+    `<h3>THIS WORK IN ITS OWN TIME</h3>`
+    + line("COLOUR", era.chroma, "MORE MUTED", "MORE COLOURFUL")
+    + line("LIGHT", era.light, "DARKER", "LIGHTER")
+    + `<i class="era__basis">AGAINST ${num(era.works)} WORKS OF ${era.from}–${era.to}</i>`;
+  el.detailEra.hidden = false;
+}
+
+/* The other works by the same hand.
+ *
+ * 83% of the collection has at least one sibling, and until the five
+ * catalogues' spellings were folded into one name per painter this could not
+ * have been built honestly: Rembrandt existed as three artists, so a panel
+ * claiming to show his other works would have shown a third of them.
+ *
+ * Nearest in date first, because the interesting neighbour of a painting is
+ * usually the one made beside it — and because a painter's span can be fifty
+ * years, in which the palette is not one thing.
+ */
+const KIN_SHOWN = 8;
+
+function paintKin(index) {
+  const kin = state.stats.siblings(index, KIN_SHOWN);
+  if (!kin.length) { el.detailKin.hidden = true; return; }
+
+  const artist = state.data.paintings[index].a;
+  const total = state.stats.groups("artist").find((g) => g.key === artist)?.works ?? 0;
+  el.detailKinLabel.textContent =
+    `${num(total - 1)} MORE BY ${artist.toUpperCase()}`;
+
+  const sources = state.data.meta.sources;
+  el.detailKinList.innerHTML = kin.map((i) => {
+    const p = state.data.paintings[i];
+    const href = `thumbs/${sources[p.c].key}/${p.i}.webp`;
+    return `<li><button type="button" data-kin="${i}" title="${escapeHtml(p.t)} · ${span(p.s, p.e)}">`
+      + `<img src="${href}" alt="${escapeHtml(p.t || "Untitled")}" loading="lazy" decoding="async">`
+      + `<i>${p.y}</i></button></li>`;
+  }).join("");
+  el.detailKin.hidden = false;
 }
 
 function hideDetail() {

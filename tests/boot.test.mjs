@@ -256,6 +256,42 @@ test("the tables open, switch, and lead back into the field", async () => {
     "the field should now be narrowed to the row that was pressed");
 });
 
+test("the detail panel places a work and offers its siblings", async () => {
+  const app = await boot();
+  // Reach a painting the way a visitor does, through a search result rather
+  // than by inventing a particle index: Monet has sixty-odd works here, so the
+  // sibling strip is guaranteed to have something in it.
+  app.byId.get("search").value = "monet";
+  app.fire("search", "input");
+  app.frame();
+  app.fire("search", "keydown", { key: "Enter", shiftKey: false });
+  await new Promise((r) => setTimeout(r, 250));   // fillDetail may await a decode
+
+  assert.equal(app.byId.get("detail").hidden, false, "a work should be open");
+
+  const era = app.byId.get("detailEra");
+  assert.equal(era.hidden, false, "a 19th-century work has a thick enough era to quote");
+  assert.match(era.innerHTML, /OF ITS TIME/, "the placement should be said in words");
+  assert.match(era.innerHTML, /AGAINST [\d,]+ WORKS OF \d{4}–\d{4}/,
+    "the era should state what it was measured against");
+
+  const kin = app.byId.get("detailKin");
+  assert.equal(kin.hidden, false, "Monet should have siblings");
+  assert.match(app.text("detailKinLabel"), /MORE BY/);
+  assert.match(app.byId.get("detailKinList").innerHTML, /data-kin="\d+"/,
+    "sibling thumbnails should be pressable");
+
+  // The colour button names the colour it would actually ask about.
+  assert.match(app.byId.get("btnNear").innerHTML, /#[0-9A-F]{6}/i,
+    "the button should name its colour, not say 'this one'");
+
+  // Pressing a sibling opens that painting in the same panel.
+  const first = app.byId.get("detailKinList").innerHTML.match(/data-kin="(\d+)"/)[1];
+  assert.doesNotThrow(() => app.fire("detail", "click", {
+    target: { closest: (s) => (s === "[data-kin]" ? { dataset: { kin: first } } : null) },
+  }));
+});
+
 test("the opening hint is spent by the first touch of the field", async () => {
   const app = await boot();
   const hint = app.byId.get("hint");

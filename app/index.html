@@ -137,6 +137,12 @@
            them: the colour you clicked, asked of the whole collection. -->
       <button class="panel__near" id="btnNear" aria-pressed="false"
               title="Rank every other painting by how near its closest measured colour comes to the marked one, in CIE L*a*b*. Press again to stop.">COLOURS LIKE THIS ONE</button>
+      <!-- Where this work sits among the paintings of its own time. "Chroma
+           14.2" is a number nobody has a feel for; "more muted than 71% of
+           what was painted around it" is the same measurement as a statement,
+           and it is the statement the field is making visually anyway. Hidden
+           entirely when the era is too thin to quote — see stats.era. -->
+      <div class="era" id="detailEra" hidden></div>
       <dl class="panel__rows">
         <div><dt>DATED</dt><dd id="detailYear"></dd></div>
         <div><dt>SCHOOL</dt><dd id="detailNat"></dd></div>
@@ -145,6 +151,14 @@
         <div><dt>PALETTE</dt><dd id="detailPalette"></dd></div>
       </dl>
       <a id="detailLink" href="#" target="_blank" rel="noopener">OPEN IN THE CATALOGUE ↗</a>
+      <!-- The other works by the same hand. Possible only since the five
+           catalogues' spellings were folded into one name per painter: before
+           that Rembrandt was three artists and this would have shown a third
+           of his work while claiming to show all of it. -->
+      <div class="kin" id="detailKin" hidden>
+        <h3 id="detailKinLabel"></h3>
+        <ul id="detailKinList"></ul>
+      </div>
     </div>
   </div>
 </aside>

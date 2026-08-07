@@ -75,6 +75,19 @@ export class Stats {
       this.light[p] /= counts[p];
     }
 
+    /* Painting -> its first particle, which is the inverse of field.owner.
+       Anything that reaches a painting by name rather than by clicking — a
+       table row, a sibling thumbnail — has an index into `paintings` and needs
+       a particle to select, and walking `owner` to find one is a scan of
+       34,000 entries for a click. Palettes are stored largest share first, so
+       the first particle is also the work's biggest patch, which is the one
+       worth ringing. */
+    this.firstParticle = new Int32Array(n);
+    for (let p = 0, at = 0; p < n; p++) {
+      this.firstParticle[p] = at;
+      at += paintings[p].k.length;
+    }
+
     this._groups = new Map();
     this._eras = new Map();
   }
