@@ -21,6 +21,7 @@
 import { Field, CHROMA_AXIS } from "./field.js";
 import { Nebula } from "./nebula.js";
 import { Stats, RANK_MIN_WORKS } from "./stats.js";
+import { STEPS } from "./story.js";
 import { perf } from "./perf.js";
 
 const PLAY_YEARS_PER_SEC = 7.5;   // the timelapse crawl
@@ -53,7 +54,8 @@ const el = {
   natFilter: $("natFilter"),
   search: $("search"), searchCount: $("searchCount"), searchList: $("searchList"),
   btnTimelapse: $("btnTimelapse"), btnPlay: $("btnPlay"),
-  btnInfo: $("btnInfo"), btnTables: $("btnTables"), foot: $("foot"),
+  btnInfo: $("btnInfo"), btnTables: $("btnTables"), btnStory: $("btnStory"),
+  foot: $("foot"),
   tables: $("tables"), tablesClose: $("tablesClose"),
   tableBy: $("tableBy"), tableMeasure: $("tableMeasure"),
   tableHigh: $("tableHigh"), tableLow: $("tableLow"),
@@ -61,7 +63,7 @@ const el = {
   tablesHighLabel: $("tablesHighLabel"), tablesLowLabel: $("tablesLowLabel"),
   timeline: $("timelineCanvas"), timelineLabel: $("timelineLabel"),
   markChip: $("markChip"),
-  about: $("about"), aboutClose: $("aboutClose"),
+  about: $("about"), aboutClose: $("aboutClose"), aboutStory: $("aboutStory"),
   aboutMethod: $("aboutMethod"), aboutSource: $("aboutSource"),
   detail: $("detail"), detailClose: $("detailClose"), detailImg: $("detailImg"),
   detailTitle: $("detailTitle"), detailArtist: $("detailArtist"),
@@ -71,6 +73,9 @@ const el = {
   detailLink: $("detailLink"), btnNear: $("btnNear"),
   detailEra: $("detailEra"), detailKin: $("detailKin"),
   detailKinLabel: $("detailKinLabel"), detailKinList: $("detailKinList"),
+  story: $("story"), storyClose: $("storyClose"), storyCount: $("storyCount"),
+  storyTitle: $("storyTitle"), storyText: $("storyText"),
+  storyBack: $("storyBack"), storyNext: $("storyNext"), storyDots: $("storyDots"),
 };
 
 const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -79,6 +84,7 @@ const state = {
   data: null, field: null, stats: null,
   tableBy: "artist",     // what the tables group by
   tableMeasure: "chroma",
+  step: -1,              // position in the story, -1 when not in it
   mode: "all",        // "all" = the whole span at once, "time" = the timelapse
   chrono: true,       // layout: true = year × lightness, false = the a* and b* plane
   playing: false,
@@ -526,6 +532,11 @@ function writeURL() {
   // colour of a particular painting, and a bare index would point at a different
   // one the next time the dataset is rebuilt.
   set("near", state.near >= 0 ? particleName(state.near) : null);
+  // Which step of the story, so a sentence and the field under it can be sent
+  // together. The step also sets school, layout and year, so those keys are
+  // written alongside it and the link works even for a reader who follows it
+  // into a build where the story has been rewritten.
+  set("step", state.step >= 0 ? String(state.step + 1) : null);
   const qs = q.toString();
   const next = `${location.pathname}${qs ? `?${qs}` : ""}${location.hash}`;
   if (next === `${location.pathname}${location.search}${location.hash}`) return;
@@ -577,6 +588,17 @@ function applyURL() {
   if (near) {
     const particle = particleNamed(near);
     if (particle >= 0) setNear(particle);
+  }
+
+  /* After everything, because opening a step sets school, layout and year
+     itself and would otherwise be overwritten by the keys read above. Bounds
+     checked against the story that actually shipped: a link made against a
+     seven-step version should land somewhere sensible in a five-step one
+     rather than opening nothing. */
+  const step = Number(q.get("step"));
+  if (Number.isInteger(step) && step >= 1) {
+    showStory(true);
+    setStep(Math.min(step, STEPS.length) - 1);
   }
 }
 
@@ -1303,9 +1325,31 @@ function bindInput() {
     if (row) enterFromTable(row.dataset.key);
   });
 
+  /* --- the story --- */
+  el.btnStory.addEventListener("click", () => showStory(el.story.hidden));
+  el.storyClose.addEventListener("click", () => showStory(false));
+  el.storyBack.addEventListener("click", () => setStep(state.step - 1));
+  el.storyNext.addEventListener("click", () => {
+    // The last step does not loop and does not congratulate you. It leaves you
+    // in the field, with the controls exactly where the story put them.
+    if (state.step >= STEPS.length - 1) showStory(false);
+    else setStep(state.step + 1);
+  });
+  el.storyDots.addEventListener("click", (event) => {
+    const dot = event.target.closest("[data-step]");
+    if (dot) setStep(+dot.dataset.step);
+  });
+
   el.btnInfo.addEventListener("click", () => {
     el.about.hidden = false;
     showTables(false);
+    showStory(false);
+  });
+  // The panel keeps the method and hands the argument on: anyone who opened it
+  // wanting to know what they are looking at should be walked, not read to.
+  el.aboutStory.addEventListener("click", () => {
+    el.about.hidden = true;
+    showStory(true);
   });
   el.aboutClose.addEventListener("click", () => { el.about.hidden = true; });
   el.detailClose.addEventListener("click", hideDetail);
@@ -1316,6 +1360,15 @@ function bindInput() {
       hideDetail();
       el.about.hidden = true;
       showTables(false);
+      showStory(false);
+      return;
+    }
+    /* In the story the arrows walk the steps rather than the years. Both are
+       "move along the argument", and only one of them is what the reader means
+       while a sentence is on screen. */
+    if (state.step >= 0 && (event.key === "ArrowRight" || event.key === "ArrowLeft")) {
+      event.preventDefault();
+      setStep(state.step + (event.key === "ArrowRight" ? 1 : -1));
       return;
     }
     if (event.target === el.search) return;   // space and arrows belong to the box
@@ -1504,6 +1557,64 @@ function enterFromTable(key) {
   }
   showTables(false);
   spendHint();
+}
+
+/* ---------- the story ----------
+ *
+ * Nine hundred words in a 420px box explained what the field is and why it
+ * looks the way it does, and nobody read them. The field makes the argument
+ * perfectly well on its own — but only if you already know to look for it, and
+ * only if you can drive the controls that show it. So the argument drives them.
+ *
+ * Every step is exactly a state the controls can reach. Nothing here is a
+ * second rendering, nothing is special-cased in the renderer, and the last step
+ * simply leaves you in the field with everything where the story put it. That
+ * is the difference between a walkthrough and a video: you are never watching,
+ * you are always already holding the instrument.
+ */
+function setStep(index) {
+  if (index < 0 || index >= STEPS.length) return;
+  state.step = index;
+  const step = STEPS[index];
+  const s = step.state;
+
+  // A school is named rather than indexed: the vocabulary is built from the
+  // data and its order is not a promise, so "Dutch" survives a rebuild that
+  // renumbers the list and `nat: 3` does not.
+  if (s.natName !== undefined) {
+    const at = state.data.meta.nationalities.indexOf(s.natName);
+    setSchools(at >= 0 ? at : -1);
+  } else if (s.nat !== undefined) {
+    setSchools(s.nat);
+  }
+  if (s.query !== undefined) setQuery(s.query);
+  if (s.chrono !== undefined) setLayout(s.chrono);
+  if (s.mode === "time") setMode("time", { year: s.year, play: false });
+  else setMode("all");
+  hideDetail();
+
+  el.storyCount.textContent = `${index + 1} / ${STEPS.length}`;
+  el.storyTitle.textContent = step.title;
+  el.storyText.textContent = step.text;
+  el.storyBack.disabled = index === 0;
+  el.storyNext.textContent = index === STEPS.length - 1 ? "EXPLORE →" : "NEXT →";
+  el.storyDots.innerHTML = STEPS.map((_, i) =>
+    `<button type="button" data-step="${i}" class="${i === index ? "is-at" : ""}" `
+    + `aria-label="Step ${i + 1}"></button>`).join("");
+}
+
+function showStory(on) {
+  el.story.hidden = !on;
+  el.btnStory.setAttribute("aria-pressed", String(on));
+  if (on) {
+    showTables(false);
+    el.about.hidden = true;
+    spendHint();
+    setStep(0);
+  } else {
+    state.step = -1;
+  }
+  syncURL();
 }
 
 /* ---------- the second layer ---------- */

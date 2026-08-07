@@ -292,6 +292,35 @@ test("the detail panel places a work and offers its siblings", async () => {
   }));
 });
 
+test("the story walks, and every step really moves the field", async () => {
+  const app = await boot();
+  app.click("btnStory");
+  assert.equal(app.byId.get("story").hidden, false, "the story should open");
+  assert.match(app.text("storyCount"), /^1 \/ \d+$/, "it should start at the first step");
+  assert.ok(app.byId.get("storyBack").disabled, "there is nothing before the first step");
+
+  // The whole claim of the story is that each step is a state of the field,
+  // not a slide. So walk it and watch the scope line, which reads the field.
+  const seen = new Set();
+  for (let i = 0; ; i++) {
+    app.frame();
+    seen.add(app.text("scope"));
+    if (app.text("storyNext").startsWith("EXPLORE")) break;
+    app.click("storyNext");
+    assert.ok(i < 20, "the story should end");
+  }
+  assert.ok(seen.size > 2,
+    `the field should be in a different state at different steps, saw ${seen.size}`);
+
+  // One of the steps narrows to a school; the field should say so.
+  assert.ok([...seen].some((s) => s.includes("DUTCH")),
+    "the school step should actually narrow the field");
+
+  // The last step leaves you in the field rather than looping or congratulating.
+  app.click("storyNext");
+  assert.equal(app.byId.get("story").hidden, true, "the story should let go at the end");
+});
+
 test("the opening hint is spent by the first touch of the field", async () => {
   const app = await boot();
   const hint = app.byId.get("hint");

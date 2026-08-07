@@ -78,15 +78,22 @@ ciò che serve agli aggregati.
       canonicalizzazione dei nomi; riguarda l'83% delle opere.
 - [x] **3.3** I colori simili resi visibili invece che nascosti dietro un bottone.
 
-### Fase 4 — menù di modalità e ricomposizione del footer
-- [ ] **4.1** Il selettore in alto al centro.
-- [ ] **4.2** Il footer si ricompone per modalità.
-- [ ] **4.3** La modalità entra nella URL come le altre variabili di stato.
-
-### Fase 5 — RACCONTO
-- [ ] **5.1** Sei passi che impostano lo stato del campo e dicono una frase.
-- [ ] **5.2** Smontare il pannello *about* da 903 parole: il *perché* va nel
+### Fase 4 — RACCONTO ✅ *(era la 5: scambiata con il menù, vedi nota)*
+*Fatta il 2026-08-08. 108 test verdi (48 JS, 60 Python).*
+- [x] **4.1** Sei passi che impostano lo stato del campo e dicono una frase.
+- [x] **4.2** Smontare il pannello *about* da 903 parole: il *perché* va nel
       racconto, il *metodo* resta come scheda tecnica, i crediti restano.
+
+> **Perché lo scambio.** Il piano metteva il menù qui, ma l'analisi da cui
+> deriva contiene l'avvertimento opposto: «va fatto *quando* ci sono almeno 3
+> modalità vere, non prima», altrimenti si ottiene «un selettore con due voci e
+> una UI più complessa di adesso». Arrivati qui le modalità sono due — campo e
+> tabelle. Il racconto è la terza, quindi viene prima e il menù nasce già pieno.
+
+### Fase 5 — menù di modalità e ricomposizione del footer *(era la 4)*
+- [ ] **5.1** Il selettore in alto al centro.
+- [ ] **5.2** Il footer si ricompone per modalità.
+- [ ] **5.3** La modalità entra nella URL come le altre variabili di stato.
 
 ### Fase 6 — CONFRONTO
 - [ ] **6.1** Due campi affiancati, non sovrapposti — la forma sovrapposta è già

@@ -179,6 +179,50 @@ body { display: flex; flex-direction: column; }
   pointer-events: none;
 }
 
+/* ---------- the story ----------
+   Anchored bottom-left over the field, not centred and not modal: the whole
+   point is that the field recomposes under each sentence, so the sentence must
+   not cover the thing it is about. Bottom left because the field is densest at
+   the right — the nineteenth century is a wall — and this is the corner that
+   is empty in every step. */
+.story {
+  position: absolute; left: 16px; bottom: 16px; z-index: 25;
+  width: 340px; max-width: calc(100% - 32px);
+  background: #050505f2; border: 1px solid #262626;
+  padding: 13px 15px 11px;
+  box-shadow: 0 12px 44px #000000cc;
+  animation: panelIn .18s cubic-bezier(.22, .61, .36, 1);
+}
+.story__close {
+  position: absolute; top: 4px; right: 4px;
+  border: none; background: none; color: #575e59;
+  font-size: 16px; line-height: 1; padding: 3px 6px; min-width: 0;
+}
+.story__close:hover { color: var(--accent); border: none; }
+.story__count {
+  margin: 0 0 6px; font-size: 8px; letter-spacing: .18em; color: #4a504c;
+}
+.story__title {
+  margin: 0 0 7px; font-size: 11px; font-weight: 500;
+  letter-spacing: .14em; color: var(--accent);
+}
+.story__text {
+  margin: 0 0 12px; font-size: 10px; line-height: 1.75; color: #9aa39d;
+}
+.story__nav { display: flex; align-items: center; gap: 10px; }
+.story__nav button { font-size: 9px; padding: 4px 9px; }
+.story__nav button:disabled { opacity: .3; cursor: not-allowed; }
+.story__nav button:disabled:hover { color: var(--text); border-color: var(--line); }
+/* The dots are the length of the argument, which is a thing worth knowing
+   before you start: seven is a walk, thirty would be a document. */
+.story__dots { display: flex; gap: 4px; margin: 0 auto; }
+.story__dots button {
+  width: 5px; height: 5px; min-width: 0; padding: 0;
+  border: 1px solid #2e3532; background: none; border-radius: 0;
+}
+.story__dots button.is-at { background: var(--accent); border-color: var(--accent); }
+.story__dots button:hover { border-color: var(--accent); }
+
 .hoverchip {
   position: absolute; pointer-events: none; z-index: 15;
   background: #050505f2; border: 1px solid var(--accent);
@@ -565,6 +609,12 @@ button[aria-pressed="true"] {
 }
 
 .about__body { padding: 16px 18px 18px; }
+/* The hand-off. Inline in the paragraph rather than a control in a row of its
+   own, because it is the sentence continuing, not a fifth thing to choose. */
+.about__story {
+  display: block; margin-top: 9px;
+  font-size: 9px; letter-spacing: .14em; padding: 5px 9px;
+}
 .about__body h2 { letter-spacing: .28em; margin-bottom: 10px; }
 .about__body h3 {
   font-size: 8px; letter-spacing: .18em; color: var(--accent);

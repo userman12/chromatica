@@ -71,6 +71,22 @@
   <div class="hoverchip" id="hoverchip" hidden></div>
   <p class="stage__axes" id="axes">HORIZONTAL · YEAR   ·   VERTICAL · LIGHTNESS L*, DARK BELOW</p>
   <p class="stage__hint" id="hint">EVERY PARTICLE IS ONE MEASURED COLOUR OF ONE PAINTING</p>
+
+  <!-- The argument, walked. Anchored over the field rather than in a panel of
+       its own, because the whole point is that the field recomposes underneath
+       each sentence: a modal would cover the thing being talked about. Every
+       step is exactly a state the controls can reach, so it is also a link. -->
+  <aside class="story" id="story" hidden>
+    <button class="story__close" id="storyClose" aria-label="Leave the story">×</button>
+    <p class="story__count" id="storyCount"></p>
+    <h2 class="story__title" id="storyTitle"></h2>
+    <p class="story__text" id="storyText"></p>
+    <div class="story__nav">
+      <button id="storyBack">← BACK</button>
+      <div class="story__dots" id="storyDots"></div>
+      <button id="storyNext">NEXT →</button>
+    </div>
+  </aside>
 </main>
 
 <footer class="hud hud--bottom" id="foot">
@@ -109,6 +125,7 @@
       <button id="btnTimelapse" aria-pressed="false" title="Move a window through time instead of showing the whole span">TIMELAPSE</button>
       <button id="btnPlay" class="is-vacant" title="Play or pause the timelapse">❚❚</button>
       <button id="btnTables" aria-pressed="false" title="Rank painters, schools and museums by the measurements">TABLES</button>
+      <button id="btnStory" aria-pressed="false" title="Seven steps through what the field is showing">STORY</button>
       <button id="btnInfo" title="About">?</button>
     </div>
   </div>
@@ -192,97 +209,38 @@
   </div>
 </aside>
 
+<!-- What the story does not carry.
+     This panel used to hold nine hundred words: what the field is, why a
+     colour sits where it sits, what density means, why it stops at 1910. All
+     of that is the *argument*, and the argument is now walked with the field
+     recomposing underneath it — which is where it always belonged, since it is
+     an argument about a picture. What stays here is the part a walk cannot
+     carry and a reader may genuinely need to check: how the numbers were
+     made, and who to credit. -->
 <aside class="panel panel--about" id="about" hidden>
   <button class="panel__close" id="aboutClose" aria-label="Close">×</button>
   <div class="about__body">
     <h2>CHROMATICA</h2>
     <p id="aboutSource"></p>
+    <p>Every particle is one real colour, taken by k-means clustering from the
+      photograph of one real painting. Nothing here is decorative: no colour was
+      chosen, corrected or invented.
+      <button class="about__story" id="aboutStory">WALK THROUGH WHAT IT SHOWS →</button></p>
 
-    <h3>WHAT YOU ARE LOOKING AT</h3>
-    <p>Every particle is one real colour, extracted by k-means clustering from the
-      photograph of one real painting. Nothing here is decorative: no colour has
-      been chosen, corrected, or invented. There are no cells, rows or columns —
-      only colour against black.</p>
-
-    <h3>WHY A COLOUR SITS WHERE IT SITS</h3>
-    <p>Two axes, and both of them are measurements. Which two is the one thing you
-      choose, and the field morphs between them rather than redrawing, because it
-      is the same colours being read a second way.</p>
-    <p><b>Chronology</b>, the view it opens on. Left to right is the year the
-      painting is dated to, linearly from the first work to the last. Bottom to top
-      is L*, its lightness. So the collection is unrolled in time: you can follow a
-      colour arriving, spreading and thinning across six centuries instead of
-      seeing it piled into a single cloud. The 19th century stands as a wall and
-      the 14th as a few sparks — that is what these museums own, shown rather than
-      evened out into fairness. The strip below the field is the same year axis, so
-      the wall stands over its own histogram.</p>
-    <p><b>Chromatic plane</b>, the second view. Left to right is a*, bottom to top
-      is b*: the CIE L*a*b* plane itself. Neutrals fall in the middle, saturated
-      colours reach the rim, hue runs around as angle. Colours that look alike land
-      near each other because that is what the space means, and the regions in the
-      cloud are not drawn — they are what the measurement does on its own. Here
-      lightness is given no axis: against near-black it is already visible as the
-      particle's own brightness, and a dim cloud is a dark century.</p>
-
-    <h3>DENSITY</h3>
-    <p>A particle is pushed out from its exact coordinate in proportion to how much
-      of the shown collection's measured colour falls in that part of the field —
-      counted in whichever of the two views is on screen, since crowding is only
-      real where the particles are actually standing. So a heavily used region
-      swells and thickens, and a rare one stays a few sparks. Area and solidity are the statistic; it is share within what is
-      shown, not raw count, so changing what is shown changes the shape of the
-      cloud instead of merely inflating it wherever the museum owns more paintings.
-      Particle size follows the cluster's share of its own painting, largest
-      first.</p>
-
-    <h3>THE WHOLE SPAN, AND THE TIMELAPSE</h3>
-    <p>By default every painting is in the field at once: this is the colour of the
-      whole collection, 1300 to 1910. The timelapse is a second reading, not the
-      main one. It weights each painting by how far its date is from the year you
-      are on, so the field becomes a moving window rather than a bin, and the
-      window widens where the collection thins — coverage swings about sixtyfold
-      between decades, and three paintings is not a period's palette, it is three
-      paintings. The strip along the bottom shows works per year, so the thin
-      stretches stay visible instead of being flattened. This is a survey of what
-      five museums happen to hold and have released, not of art history.</p>
-
-    <h3>FINDING SOMETHING IN IT</h3>
-    <p>Two questions can be put to the field, and both answer the same way: the
-      works that answer keep a thin ring on the field and are named in a list
-      beside it, in date order, and Enter walks them one at a time. Nothing is
-      removed — everything else only dims — so an answer is always read against
-      the collection it came out of rather than against black.</p>
-    <p><b>By name.</b> Type a title or an artist. All the words have to match, so
-      a second one narrows; case and accents are folded, because five catalogues
-      do not spell diacritics the same way and nobody types them anyway.</p>
-    <p><b>By colour.</b> Open a painting by clicking one of its particles and ask
-      for colours like that one. Every other painting is ranked by how near its
-      closest measured colour comes to the one you clicked — straight-line
-      distance in CIE L*a*b*, lightness included — and the nearest two dozen come
-      back. This is the question this dataset answers better than any other, and
-      no amount of typing could reach it: it finds works that have a colour in
-      common with each other and nothing else, across schools and across
-      centuries. The list states the colour it was given and how far the last of
-      the works it returned actually sits from it, in ΔE, since a small number
-      there means the collection is full of that colour and a large one means it
-      barely holds it at all.</p>
-
-    <h3>THE EDGE AT 1910</h3>
-    <p>The field stops around 1910, and it stops rather than looping. That is a
-      copyright boundary, not an aesthetic one: paintings after it are almost never
-      in the public domain, so the twentieth century cannot be shown honestly here.</p>
-
-    <h3>METHOD</h3>
+    <h3>HOW THE COLOURS WERE MEASURED</h3>
     <ul id="aboutMethod"></ul>
 
     <h3>SOURCES</h3>
     <p>Images and metadata come from the open-access programmes of these
-      collections, all of them CC0. Attribution is provided on every work: click
-      a particle to see the painting it was measured from and the museum that
-      holds it.</p>
+      collections, all of them CC0 or public domain. Attribution is on every
+      work: click a particle to see the painting it was measured from and the
+      museum that holds it.</p>
     <ul id="aboutSources"></ul>
     <p>A handful of paintings are held in more than one of these catalogues.
-      Where the artist, title and date agree, the work is counted once.</p>
+      Where the artist, title and date agree, the work is counted once. Five
+      catalogues also spell one painter several ways — Rembrandt three times
+      between them — so spellings are folded to one name per hand, without ever
+      merging an attribution: a follower is not the master.</p>
     <p>Built by <a href="https://x.com/userluke_" target="_blank" rel="me noopener">@userluke_</a> ·
       <a href="https://github.com/userman12/chromatica" target="_blank" rel="noopener">source on GitHub ↗</a></p>
   </div>
