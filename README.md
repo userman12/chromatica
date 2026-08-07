@@ -7,12 +7,16 @@ Six centuries of painting, reduced to the colours they are actually made of.
 Every particle in the field is a real colour, extracted by k-means clustering
 from the photograph of one real painting in the open-access collections of the
 Metropolitan Museum of Art, the Art Institute of Chicago, the Cleveland Museum
-of Art and the National Gallery of Art. Nothing is decorative: no colour was
-chosen, corrected or invented, and every particle is clickable back to the work
-it came from, at the museum that holds it.
+of Art, the National Gallery of Art and the Rijksmuseum. Nothing is decorative:
+no colour was chosen, corrected or invented, and every particle is clickable
+back to the work it came from, at the museum that holds it.
 
-The whole collection is on screen at once. Switch on the timelapse and the field
-recomposes century by century.
+There are four ways to read the same measurements, chosen at the top of the
+screen. **FIELD** is the whole collection at once, and the timelapse walks it
+century by century. **TABLES** ranks painters, schools and museums by the same
+numbers. **STORY** walks the argument in seven steps, setting the field under
+each sentence. **COMPARE** puts two schools side by side against one fixed
+scale.
 
 Built by [@userluke_](https://x.com/userluke_).
 
@@ -22,8 +26,11 @@ Built by [@userluke_](https://x.com/userluke_).
 
 Open **[userman12.github.io/chromatica](https://userman12.github.io/chromatica/)**.
 Nothing needs to be configured and nothing is behind a click: the default state is
-the whole collection at once, 7,094 paintings and 32,350 measured colours, 1309 to
+the whole collection at once, 7,471 paintings and 34,062 measured colours, 1309 to
 1910. Everything below is optional.
+
+If you would rather be shown than left to explore, press **STORY**: seven steps,
+each setting the field and saying one sentence about what you are looking at.
 
 ### Four things to try first
 
@@ -32,7 +39,8 @@ the whole collection at once, 7,094 paintings and 32,350 measured colours, 1309 
 | **Click any particle** | Opens the painting it was measured from, with its full palette, the clicked colour marked, and a link to the museum that holds it. |
 | **Press CHROMATIC PLANE** | The same colours restack by hue instead of by date. Nothing is refiltered — the cloud morphs, which is the point: one set of measurements read two ways. |
 | **Press TIMELAPSE, then drag the strip** | Time stops being a position and becomes a weight. The field thins to one period and walks through six centuries. |
-| **Open a painting and press COLOURS LIKE THIS ONE** | The nearest two dozen paintings *by colour* — across schools and across centuries. See below. |
+| **Open a painting and press the colour button** | The nearest two dozen paintings *by colour* — across schools and across centuries. The button names the colour it will ask about. See below. |
+| **Press TABLES** | The most and least colourful painters, schools and museums. The top of the chroma table is the whole argument of the piece in names rather than as a curve. Every row leads back into the field. |
 
 ### The controls
 
@@ -58,7 +66,10 @@ the whole collection at once, 7,094 paintings and 32,350 measured colours, 1309 
   with mean chroma drawn over them as a line. The three dots on that line are its
   own extremes: highest, lowest, and where the field ends. Hover one to name it,
   click one to open the timelapse there.
-- **RESET** puts everything back. **?** opens the method notes.
+- **The scope line**, above the field, says what you have narrowed to and lets you
+  lift any one narrowing by pressing it. It replaced RESET, which could undo a
+  state but could not teach one — and the ⧉ beside it copies a link to exactly
+  the view you are looking at. **?** opens the method notes.
 
 ### Keyboard
 
@@ -95,7 +106,7 @@ python3 -m http.server 8765
 ```
 
 That is the whole app: `app/index.html`, four JS modules, one stylesheet, one
-1.2 MB JSON and 7,094 committed thumbnails (249 MB). **It never contacts a museum** — the
+1.2 MB JSON and 7,471 committed thumbnails (261 MB). **It never contacts a museum** — the
 images were fetched and resized once, offline, by the pipeline.
 
 To rebuild the data from the sources instead, see [Pipeline](#pipeline). It takes
@@ -214,7 +225,7 @@ collapse into `Other / unattributed`.
    Sargent have no such region at all; a panel portrait inset on black has a
    large one at blackness 2.45, and blackness is what excludes it.
 
-   Validated over all 7,094: 839 caught by the ring, 236 by the corner pass, and
+   Validated over the 7,094 of the four-source build: 839 caught by the ring, 236 by the corner pass, and
    **not one** of 481 painted dark grounds wrongly stripped — the single control
    that tripped turned out on inspection to be an arched triptych genuinely shot
    on black, so it was the control set that was wrong. Zurbarán, Sargent and the
@@ -236,7 +247,7 @@ collapse into `Other / unattributed`.
   birth/death, and "after Donatello, 1770" entries are correctly dated copies.
 - A photograph's colour is treated as the painting's colour. Museum photography
   is consistent but not colorimetric, and varnish, age and lighting are all in
-  there. This is a survey of four museums' photographs of their public-domain
+  there. This is a survey of five museums' photographs of their public-domain
   holdings — not of art history.
 
 ---
@@ -289,7 +300,7 @@ normalised artist, title and year. Anonymous untitled works are never merged:
 two unrelated `Untitled` panels by `Unattributed` in the same year are two
 paintings, not one.
 
-**One vocabulary from four** — the four museums spell the same school four ways.
+**One vocabulary from five** — the five museums spell the same school five ways.
 Demonyms are folded (`English`/`Scottish`/`Welsh` → `British`), the National
 Gallery's literal `Other` is emptied rather than becoming a school sitting beside
 `Other / unattributed`, and everything under 25 works collapses into that bucket.
@@ -337,7 +348,7 @@ resize, with 8×8 windowed SSIM: JPEG q74 came out 40.7 KB at mean 0.9477 / wors
 point where WebP stops losing in the *worst* block rather than merely on average
 — at q76 the worst block drops to 0.9058, so the ~30% saving WebP is usually
 quoted for is not free here. 15% smaller at strictly-no-worse fidelity, across
-7,094 committed files: 290 MB → 247 MB. It was decided before the first large
+the committed files: 290 MB → 247 MB at four sources. It was decided before the first large
 commit on purpose, because these files are in git: re-rendering the set later
 would leave both copies in history forever.
 
@@ -358,8 +369,8 @@ to disk.
 | 01 select | **7,499 candidates** · met 2,840 · nga 2,689 · aic 1,179 · cma 791, after cross-source dedup |
 | 02 image URLs | 2,840 resolved from the Met API · the other three carry their URL from selection |
 | 03 palettes | **7,105 usable** · 377 dropped as greyscale · 22 empty · 11 failed to fetch |
-| 04 build | 7,094 paintings · 32,350 measured colours · 1309–1910 · 1.2 MB |
-| 05 thumbs | 7,094 rendered · 0 failed · 596–640 px long edge · 247 MB committed |
+| 04 build | 7,471 paintings · 34,062 measured colours · 1309–1910 · 1.2 MB |
+| 05 thumbs | 7,471 rendered · 0 failed · 596–640 px long edge · 261 MB committed |
 | 06 og image | 1200×630 preview card, 651 KB, composed from the published dataset |
 
 Per source in the published field: the Met 2,544, the National Gallery 2,689,
@@ -427,7 +438,7 @@ a failure:
   counts that agree with `meta`, every year inside the declared range
   (`field.js` indexes a typed array with `p.y - y0` and does not bounds-check),
   hex colours in the exact form the panel compares by string identity, and every
-  referenced thumbnail present with no orphans among the 7,094 committed files.
+  referenced thumbnail present with no orphans among the 7,471 committed files.
 
 That last one is the check that earns its place in CI. `app/` is uploaded to
 Pages verbatim, so a painting whose thumbnail never got committed is a broken
@@ -435,12 +446,88 @@ panel in production, and nothing between the working tree and a visitor's
 browser would have said a word about it. The deploy job now `needs:` the test
 job, and pull requests get the checks without publishing.
 
+Two more are worth naming because of what they guard. **`boot.test.mjs`** starts
+the real `main.js` against a stub DOM and drives every control a visitor can
+reach. It has caught four regressions across three sessions, each of the same
+shape — a rename, a listener wired to the wrong place, a panel painted from a
+setter that no longer runs — and each of which the arithmetic tests could not
+have seen. It cannot see pixels, which is exactly why the layout work still
+needs a browser.
+
+**`story.test.mjs`** recomputes the chroma curve from the built dataset and
+checks that every number quoted in the story's prose still holds: the peak, the
+trough, the closing value, which school is lowest. Prose does not recompute
+itself when a collection is added. Adding the Rijksmuseum moved the Dutch mean;
+the next source will move something else, and this is what stops the writing
+from quietly becoming wrong. When it fails, the fix is to look at what the data
+now says and rewrite the sentence — never to loosen the test.
+
+## Four readings
+
+The interface did not become hard to hold because there are too many controls.
+There are eight. It became hard because all eight were offered at once, at one
+rank, with nothing saying which belonged together — so the state you were in was
+the product of five independent variables and no part of the screen named it.
+
+One question at the top now, four answers, and choosing one recomposes the
+footer so that only its own controls are live. Controls are put away with
+`visibility` and never with `hidden`: the field is a canvas that fills whatever
+the two bars leave it, so a control that stops taking up space resizes the
+picture and the whole cloud jumps at the moment you press a reading.
+
+**FIELD** keeps the controls that change how the field is drawn, which is what a
+control under a picture should do.
+
+**TABLES** ranks painters, schools and museums by the same two measurements the
+field is built from, at both ends, because a ranking of one end is half an
+argument. The top of the chroma table is the whole thesis of the piece stated in
+names rather than as a curve — Simone Martini, Bernardo Daddi, Lorenzo Monaco —
+and there is a test asserting it stays medieval. A floor of eight works keeps it
+from being a table about sampling noise. Every row leads back into the field: a
+table is a door, not a detour. Except a museum row, which leads nowhere and is
+drawn as a reading rather than a button, because the field has no filter for
+which collection a work came from and inventing one that exists in a table and
+nowhere else would be worse.
+
+**STORY** walks the argument in seven steps, each setting the field and saying
+one sentence, with the field recomposing underneath. No step is a special
+rendering: each is exactly a state the controls can reach, which is why each is
+also a link, and why the last one does not loop or congratulate — it lets go,
+leaving you in the field with everything where the story put it.
+
+**COMPARE** puts two schools side by side. This was built once as an overlay —
+both on the same field at once — and withdrawn, because two clouds in one space
+read as one filter or the other rather than as a comparison. Beside each other
+they read, and what makes it honest is that `CHROMA_AXIS` is fixed rather than
+rescaled per filter, so neither side can look saturated merely by being the more
+colourful of the two. Each bar carries a mark showing where the other school
+falls on it, and the panel ends in the sentence the numbers add up to.
+
+### What went, and why
+
+**RESET** is gone. The scope line above the field says what you have narrowed to
+and lets you lift any one narrowing by pressing it; a button permanently lit to
+undo a state you may not be in was the interface admitting its state was hard to
+read.
+
+**The about panel** went from 903 words to 150. All the argument it carried —
+what the field is, why a colour sits where it sits, why 1910 — is the story now,
+which is where an argument about a picture belongs. What stayed is the part a
+walk cannot carry: how the numbers were made, and who to credit.
+
+**The bins** stopped being shipped. Ninety-seven of them, plus an index on every
+painting: 55 KB, 4.3% of the payload, parsed by every visitor and read by
+nothing. They were built for a column layout the app stopped using when it
+became a particle field. They still decide the order paintings are written in,
+and the invariant they existed to guarantee — a year is never split — is now
+asserted against the array itself.
+
 ## App
 
 `app/` is plain static files — no bundler, no build step, no dependencies. The
 GitHub Actions workflow uploads the directory as-is.
 
-The 32,350 colours are **particles in a field**, one per (painting, cluster).
+The 34,062 colours are **particles in a field**, one per (painting, cluster).
 There is no grid, no row, no cell and no border inside the field: only colour
 against black. Every control lives in the two HUD bars, never on the surface.
 
@@ -472,8 +559,8 @@ rank within its own painting.
 
 ### Time is a weight, not a position
 
-**The default state is the whole collection at once** — all 7,094 paintings, all
-32,350 colours, 1309 to 1910, every painting weighted the same. That is the
+**The default state is the whole collection at once** — all 7,471 paintings, all
+34,062 colours, 1309 to 1910, every painting weighted the same. That is the
 picture, and it is complete without touching anything.
 
 **The timelapse is a mode you switch on.** It replaces the flat weight with a
@@ -502,7 +589,7 @@ canvas that is *held*, and each frame blits that and strokes the marks over it.
 Why it is split that way is below.
 
 The table is the browser measurement, taken **before** the cloud was split out, at
-32,350 particles and dpr 2 on an M-series Mac, driving the real page through the
+the 32,350-particle build and dpr 2 on an M-series Mac, driving the real page through the
 timelapse and back. It is left as measured rather than restated, because it is
 what motivated the split and the figures after it are simulated rather than
 observed in a browser:
@@ -587,10 +674,10 @@ Three things had to be fixed to get there, and two of them were not the particle
   the clock and were being redone sixty times a second anyway. Which particles are
   present and how crowded each cell of the field is depend on the year and the
   filter, so that whole pass is keyed and skipped when neither moved. And the idle
-  breathing, `sin(ωt + phase)` per particle, was 32,350 `Math.sin` calls a frame;
+  breathing, `sin(ωt + phase)` per particle, was one `Math.sin` per particle per frame;
   holding cos and sin of each phase turns it into two sines a frame and a
   multiply-add per particle, by the angle-addition identity. Measured in node over
-  the real dataset, 32,350 particles: the whole collection **1.37 → 0.61 ms**, a
+  the dataset as it then stood, 32,350 particles: the whole collection **1.37 → 0.61 ms**, a
   paused timelapse **0.42 → 0.07 ms**, one school **0.16 → 0.06 ms**, and a
   playing timelapse 0.37 → 0.35, which is the case the cache cannot help because
   the year changes every frame. Checked against the previous implementation over
@@ -598,7 +685,7 @@ Three things had to be fixed to get there, and two of them were not the particle
   apart by at most 1.2 × 10⁻⁴ px — Float32 rounding in the identity, three orders
   of magnitude under the redraw threshold.
 
-Colour is the one thing not optimised. 30,244 of the 32,350 particles are a
+Colour is the one thing not optimised. 31,664 of the 34,062 particles are a
 distinct hex, so `fillStyle` is re-parsed for nearly every particle. Quantising the palette would collapse that to a few hundred parses, and
 would also mean the colours on screen are no longer the colours that were measured.
 It stays.
@@ -743,7 +830,7 @@ The ΔE ceiling exists for the tail: it bites on 2 of those 400, both highly
 saturated, where returning ten or twenty works is honest and reaching further
 would not be.
 The list header prints the reach so the strength of the claim is visible rather
-than implied. One click costs 1.1 ms over 32,350 particles.
+than implied. One click cost 1.1 ms over the 32,350 particles it was measured on.
 
 The header also carries its own dismissal, because nothing else can: a text
 question is put away in the box that holds it, and binding a colour question to
