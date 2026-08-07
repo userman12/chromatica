@@ -56,8 +56,15 @@ SOURCES = {
         "url": "https://www.nga.gov/artworks/{}",
         "site": "https://github.com/NationalGalleryOfArt/opendata",
     },
+    "rijks": {
+        "name": "Rijksmuseum",
+        "short": "THE RIJKSMUSEUM",
+        "licence": "Public Domain Mark 1.0",
+        "url": "https://id.rijksmuseum.nl/{}",
+        "site": "https://data.rijksmuseum.nl/",
+    },
 }
-SOURCE_ORDER = ("met", "aic", "cma", "nga")
+SOURCE_ORDER = ("met", "aic", "cma", "nga", "rijks")
 
 # Art Institute: one Elasticsearch query against the search endpoint. They ask
 # for a contact address in AIC-User-Agent and are strict about nothing else.
@@ -99,6 +106,23 @@ NGA_OBJ_CONSTITUENTS = DATA / "nga_objects_constituents.csv"
 NGA_CSV_BASE = "https://raw.githubusercontent.com/NationalGalleryOfArt/opendata/main/data/"
 # maxpixels is honoured by their IIIF server; 843 matches what AIC serves.
 NGA_IIIF = "https://api.nga.gov/iiif/{}/full/!843,843/0/default.jpg"
+
+# Rijksmuseum: OAI-PMH, and keyless -- which is the only reason it is here.
+# The endpoint every tutorial still names, www.rijksmuseum.nl/api/en/collection,
+# answers 410 Gone, and its replacement wants a registered key. OAI-PMH does
+# not, nor does the Linked Art resolver behind id.rijksmuseum.nl, so this source
+# is admitted on exactly the terms the other four were.
+RIJKS_OAI = "https://data.rijksmuseum.nl/oai"
+# Set 260214 is the museum's own curated "Top 1000", which is a deliberate
+# narrowing: every Rijksmuseum painting would be ~3,000 works and ~90 MB of
+# committed thumbnails, against 400 works and ~14 MB for the list the museum
+# itself considers essential. See sources/rijks.py for the whole argument.
+RIJKS_SET = "260214"
+RIJKS_TYPE = "schilderij"               # the set also holds prints, furniture, silver
+RIJKS_IIIF_SIZE = "!843,843"            # same request the National Gallery gets
+# AAT "nationality". Established by resolving a known painter and reading the
+# result, not guessed: 300055147 looks like the right code and is gender.
+RIJKS_NATIONALITY_AAT = "http://vocab.getty.edu/aat/300379842"
 
 # --- selection filters (Phase 1 validated) -------------------------------
 # Western painting traditions only. Asian/Islamic Art are excluded: mixing them

@@ -47,6 +47,20 @@ def main():
 
     all_stats = {}
     records = []
+    # Adding a fifth collection should not mean re-harvesting the other four.
+    # With --only, whatever is already in selected.json for the sources *not*
+    # being run is carried forward, so `--only rijks` adds a source instead of
+    # replacing the file with one. Without --only every source runs and the
+    # file is rebuilt from scratch, which is what a full rebuild should mean.
+    if args.only and C.SELECTED.exists():
+        carried = [r for r in json.loads(C.SELECTED.read_text())
+                   if r["src"] not in keys]
+        if carried:
+            held = collections.Counter(r["src"] for r in carried)
+            print("carried forward from the previous run: "
+                  + ", ".join(f"{k} {n:,}" for k, n in sorted(held.items())))
+            records.extend(carried)
+
     for key in keys:
         stats = collections.Counter()
         print(f"\n=== {key}  {C.SOURCES[key]['name']}", flush=True)
@@ -73,7 +87,7 @@ def main():
     C.SELECTED.write_text(json.dumps(kept, ensure_ascii=False))
 
     print(f"\n{'-' * 46}")
-    for key in keys:
+    for key in C.SOURCE_ORDER:
         n = sum(1 for r in kept if r["src"] == key)
         print(f"{key:<6} {C.SOURCES[key]['short']:<24} {n:>7,}")
     if dropped:

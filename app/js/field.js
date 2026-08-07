@@ -569,7 +569,7 @@ export class Field {
    * The particles are the ones `step()` collected — the same set the field puts
    * rings on, so the list, the rings and the stepping can never disagree about
    * what answered. Year order rather than index order, because the index order is
-   * the order four catalogues happened to be merged in.
+   * the order five catalogues happened to be merged in.
    *
    * @returns {number[]} particle indices, empty when nothing is being searched
    */
@@ -770,7 +770,7 @@ export class Field {
 }
 
 /** Case and accents folded away: nobody types Brueghel the same way twice, and the
-    four catalogues do not agree with each other about diacritics either. */
+    five catalogues do not agree with each other about diacritics either. */
 const fold = (s) => s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
 
 const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);

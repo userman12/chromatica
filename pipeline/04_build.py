@@ -13,6 +13,7 @@ import re
 import sys
 import collections
 import datetime
+import unicodedata
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -23,6 +24,11 @@ from sources import thumb_path
 # "British, born Germany", "American, 19th century"). Keep the leading demonym,
 # which is the reliable part -- and the part all four museums agree on.
 NATIONALITY_MIN_COUNT = 25
+
+# Field lengths in the published record. The artist is trimmed before the
+# spellings are folded rather than after -- see the note in main().
+TITLE_MAX = 140
+ARTIST_MAX = 90
 
 # Four catalogues, four spellings of the same school. Folded to whichever form
 # the largest share of the collection already uses, so the filter offers one
@@ -37,6 +43,137 @@ NATIONALITY_ALIAS = {
     # "Other / unattributed" bucket, which is exactly where it belongs instead.
     "Other": "", "Unknown": "", "Various": "",
 }
+
+
+# --- one painter, one spelling ------------------------------------------
+# Five catalogues, five house styles for the same hand. The Met writes
+# "Rembrandt (Rembrandt van Rijn)", the Rijksmuseum "Rembrandt van Rijn", the
+# National Gallery "Rembrandt van Rijn"; Cezanne appears with and without his
+# accent, van Dyck with and without his knighthood. Left alone the same painter
+# is several artists, which is wrong on the detail panel and wrong for anything
+# that counts by artist.
+#
+# Two things this deliberately does NOT do, because both would destroy real
+# information:
+#
+#   - It does not merge across attribution. "Follower of Rembrandt van Rijn" is
+#     not Rembrandt: it is a different hand, and its palette is a different
+#     measurement. The qualifier is kept as part of the identity, and only the
+#     painter's name inside it is normalised.
+#   - It does not merge on surname. "David" is Gerard David (Bruges, 1460) and
+#     Jacques-Louis David (Paris, 1748); "Peale" is four different Peales;
+#     "Veneziano" is four unrelated painters. So a key must be at least two
+#     tokens, and single-name masters are matched through their parenthetical
+#     expansion instead -- which is exactly the form the catalogues supply.
+ATTRIBUTION = (
+    "formerly attributed to", "attributed to", "workshop of", "studio of",
+    "follower of", "circle of", "manner of", "style of", "school of",
+    "imitator of", "copy after", "possibly by", "after", "and workshop",
+)
+# "Sir" is an honorific and the same man without it. "the Elder" and "the
+# Younger" look similar and are the opposite case -- they are what tells two
+# painters of one name apart -- so they are never touched.
+HONORIFIC = ("sir ",)
+
+
+def _fold(text):
+    text = unicodedata.normalize("NFD", text or "")
+    return "".join(c for c in text if unicodedata.category(c) != "Mn").lower()
+
+
+def _has_accents(raw):
+    """Diacritics only. Comparing against _fold() would have answered "yes" for
+    every capitalised name, because _fold lowercases as well as strips."""
+    return any(unicodedata.category(c) == "Mn"
+               for c in unicodedata.normalize("NFD", raw or ""))
+
+
+def split_attribution(raw):
+    """("follower of", "Rembrandt van Rijn") -- qualifier and painter."""
+    name = (raw or "").strip()
+    low = _fold(name)
+    for qualifier in ATTRIBUTION:
+        if low.startswith(qualifier + " "):
+            return qualifier, name[len(qualifier) + 1:].strip()
+        if low.endswith(" " + qualifier):
+            return qualifier, name[:-(len(qualifier) + 1)].strip()
+    return "", name
+
+
+def identity_keys(name):
+    """Every multi-token form this spelling could be recognised by.
+
+    A catalogue writes either the short name with the full one in brackets, or
+    the full one alone; taking both sides of the bracket as candidate keys is
+    what lets those two meet.
+    """
+    keys = set()
+    for candidate in [re.sub(r"\(.*?\)", " ", name)] + re.findall(r"\((.*?)\)", name):
+        flat = _fold(candidate)
+        for honorific in HONORIFIC:
+            if flat.startswith(honorific):
+                flat = flat[len(honorific):]
+        flat = re.sub(r"[^a-z0-9 ]+", " ", flat)
+        flat = re.sub(r"\s+", " ", flat).strip()
+        if " " in flat:          # single tokens are ambiguous; see the note above
+            keys.add(flat)
+    return keys
+
+
+def canonical_artists(records):
+    """raw spelling -> the one spelling all of them will be shown as."""
+    groups = collections.defaultdict(set)          # (qualifier, key) -> spellings
+    counts = collections.Counter()
+    for rec in records:
+        raw = rec["artist"]
+        counts[raw] += 1
+        qualifier, name = split_attribution(raw)
+        for key in identity_keys(name):
+            groups[(qualifier, key)].add(raw)
+
+    # Union the spellings that share any key, within one attribution class.
+    parent = {}
+
+    def find(x):
+        parent.setdefault(x, x)
+        while parent[x] != x:
+            parent[x] = parent[parent[x]]
+            x = parent[x]
+        return x
+
+    def union(a, b):
+        ra, rb = find(a), find(b)
+        if ra != rb:
+            parent[ra] = rb
+
+    for spellings in groups.values():
+        spellings = sorted(spellings)
+        for other in spellings[1:]:
+            union(spellings[0], other)
+
+    clusters = collections.defaultdict(list)
+    for raw in counts:
+        clusters[find(raw)].append(raw)
+
+    def preference(raw):
+        """Least bracketed, then no honorific, then accented, then most used.
+
+        Brackets are a catalogue's way of carrying an alias and read as noise on
+        the panel. "Sir" is a title the museum chose to print, not part of the
+        name, and printing it for Reynolds but not for van Dyck -- purely
+        because more catalogues happened to knight one of them -- would look
+        like a fact about the painters. And accents are the painter's actual
+        name: a catalogue that drops them is being lossy, not tidy.
+        """
+        return (("(" in raw), _fold(raw).startswith(HONORIFIC),
+                -_has_accents(raw), -counts[raw], len(raw))
+
+    canon = {}
+    for members in clusters.values():
+        best = sorted(members, key=preference)[0]
+        for raw in members:
+            canon[raw] = best
+    return canon
 
 
 def normalize_nationality(raw):
@@ -101,6 +238,26 @@ def main():
     if not usable:
         sys.exit("no usable paintings -- run stages 2 and 3 first")
 
+    # One painter, one spelling, across all five catalogues. Applied here rather
+    # than in each adapter because it is a statement about the union: two
+    # spellings only need reconciling once they are in the same field together.
+    #
+    # Trimmed to the published length *first*, because the folding has to see
+    # the strings the field will actually carry. Doing it the other way round
+    # let one escape: the Met writes "Netherlandish Painter (possibly Goswijn
+    # van der Weyden, active by 1491, died after 1538), ca. 1515-20", whose
+    # trailing date makes it a different identity from the plain
+    # "Netherlandish Painter" -- until the 90-character cut removed the date
+    # again and left a near-duplicate in the field that nothing would fold.
+    for rec in usable:
+        rec["artist"] = re.sub(r"[,\s]+$", "", rec["artist"][:ARTIST_MAX]) or "Unattributed"
+    canon = canonical_artists(usable)
+    merged = sum(1 for raw, best in canon.items() if raw != best)
+    for rec in usable:
+        rec["artist"] = canon.get(rec["artist"], rec["artist"])
+    print(f"artists: {len(set(canon.values()))} after folding "
+          f"{merged} duplicate spellings")
+
     # Nationality vocabulary: rare values collapse to "Other" so the filter
     # stays a short, useful list instead of 90 one-off entries.
     raw_counts = collections.Counter()
@@ -128,8 +285,8 @@ def main():
             out_paintings.append({
                 "i": rec["id"],
                 "c": src_index[rec["src"]],
-                "t": rec["title"][:140],
-                "a": rec["artist"][:90],
+                "t": rec["title"][:TITLE_MAX],
+                "a": rec["artist"],   # already trimmed, then folded, above
                 "y": rec["year"],
                 "s": rec["yearStart"],
                 "e": rec["yearEnd"],

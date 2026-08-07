@@ -1150,7 +1150,7 @@ async function fillDetail(particle) {
   const p = state.data.paintings[F.owner[particle]];
   const thisHex = F.css[particle];
   // `c` indexes meta.sources: the thumbnail path, the outbound link and the
-  // credit line all come from there, because four catalogues number their own
+  // credit line all come from there, because five catalogues number their own
   // objects independently and an id alone no longer identifies anything.
   const src = state.data.meta.sources[p.c];
   const href = `thumbs/${src.key}/${p.i}.webp`;
