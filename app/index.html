@@ -47,6 +47,20 @@
          stale and the empty state is never shown. -->
     <div class="scope" id="scope" role="status" aria-live="polite"></div>
   </div>
+
+  <!-- One question, four answers, at the top and in the middle.
+       The controls did not grow past what a person can hold because there are
+       too many of them — there are eight — but because they were all offered at
+       once, at one rank, with no statement of which belonged together. These
+       are the four ways of reading the same measurements, and choosing one
+       recomposes the footer so that only its own controls are live. -->
+  <nav class="views" id="views" aria-label="Reading">
+    <button data-view="field" aria-pressed="true">FIELD</button>
+    <button data-view="tables" aria-pressed="false">TABLES</button>
+    <button data-view="story" aria-pressed="false">STORY</button>
+  </nav>
+
+  <div class="hud__right">
   <dl class="readout">
     <div><dt>WORKS</dt><dd id="statWorks">—</dd></div>
     <div><dt>COLOURS</dt><dd id="statColours">—</dd></div>
@@ -64,6 +78,7 @@
       <svg viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path fill="currentColor" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82a5.9 5.9 0 0 1 2-.27c.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8Z"/></svg>
     </a>
   </nav>
+  </div>
 </header>
 
 <main class="stage" id="stage">
@@ -91,7 +106,7 @@
 
 <footer class="hud hud--bottom" id="foot">
   <div class="controls">
-    <div class="cursor">
+    <div class="cursor" id="cursor">
       <span class="cursor__label" id="cursorLabel">SHOWING</span>
       <span class="cursor__year" id="cursorValue">ALL YEARS</span>
       <span class="cursor__range is-vacant" id="cursorRange">
@@ -99,7 +114,7 @@
       </span>
     </div>
 
-    <div class="filter filter--find">
+    <div class="filter filter--find" id="findWrap">
       <label class="filter__label" for="search">FIND</label>
       <input id="search" type="search" autocomplete="off" spellcheck="false"
              placeholder="TITLE OR ARTIST" aria-describedby="searchCount"
@@ -110,27 +125,28 @@
       <ul class="findlist" id="searchList" hidden></ul>
     </div>
 
-    <div class="filter filter--school">
+    <div class="filter filter--school" id="schoolWrap">
       <label class="filter__label" for="natFilter">SCHOOL</label>
       <select id="natFilter"><option value="-1">ALL</option></select>
     </div>
 
-    <!-- RESET used to live here. It is gone because the scope line above the
-         field now carries the same power in a form that also explains itself:
-         every narrowing is a chip you can press to lift, and one press clears
-         them all. A button that is permanently lit to undo a state you may not
-         be in was the interface admitting its state was hard to read. -->
+    <!-- What is left here is the field's own controls, and only those.
+         RESET went when the scope line above the field took over saying and
+         undoing the state; TABLES and STORY went up into the reading menu,
+         where they belong — they are not things you do to the field, they are
+         other ways of reading it. What remains changes how the field is drawn,
+         which is what a control under a picture should do. -->
     <div class="btns">
       <button id="btnLayout" title="Restack the same colours by hue instead of by year">CHROMATIC PLANE</button>
-      <button id="btnTimelapse" aria-pressed="false" title="Move a window through time instead of showing the whole span">TIMELAPSE</button>
-      <button id="btnPlay" class="is-vacant" title="Play or pause the timelapse">❚❚</button>
-      <button id="btnTables" aria-pressed="false" title="Rank painters, schools and museums by the measurements">TABLES</button>
-      <button id="btnStory" aria-pressed="false" title="Seven steps through what the field is showing">STORY</button>
-      <button id="btnInfo" title="About">?</button>
+      <span class="btns__pair" id="timelapseWrap">
+        <button id="btnTimelapse" aria-pressed="false" title="Move a window through time instead of showing the whole span">TIMELAPSE</button>
+        <button id="btnPlay" class="is-vacant" title="Play or pause the timelapse">❚❚</button>
+      </span>
+      <button id="btnInfo" title="How the colours were measured">?</button>
     </div>
   </div>
 
-  <div class="timeline">
+  <div class="timeline" id="timelineWrap">
     <span class="timeline__label" id="timelineLabel">BARS WORKS · LINE CHROMA · CLICK FOR TIMELAPSE</span>
     <!-- Overwritten from the dataset at boot (see compose()); these are the
          values a screen reader would read in the frames before the module has

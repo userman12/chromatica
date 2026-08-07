@@ -90,10 +90,11 @@ ciò che serve agli aggregati.
 > una UI più complessa di adesso». Arrivati qui le modalità sono due — campo e
 > tabelle. Il racconto è la terza, quindi viene prima e il menù nasce già pieno.
 
-### Fase 5 — menù di modalità e ricomposizione del footer *(era la 4)*
-- [ ] **5.1** Il selettore in alto al centro.
-- [ ] **5.2** Il footer si ricompone per modalità.
-- [ ] **5.3** La modalità entra nella URL come le altre variabili di stato.
+### Fase 5 — menù di modalità e ricomposizione del footer ✅ *(era la 4)*
+*Fatta il 2026-08-08. 109 test verdi (49 JS, 60 Python).*
+- [x] **5.1** Il selettore in alto al centro.
+- [x] **5.2** Il footer si ricompone per modalità.
+- [x] **5.3** La modalità entra nella URL come le altre variabili di stato.
 
 ### Fase 6 — CONFRONTO
 - [ ] **6.1** Due campi affiancati, non sovrapposti — la forma sovrapposta è già

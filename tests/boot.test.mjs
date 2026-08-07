@@ -141,6 +141,9 @@ async function boot() {
     scope: (key) => fire("scope", "click", {
       target: { closest: (sel) => (sel === "[data-scope]" ? { dataset: { scope: key } } : null) },
     }),
+    view: (name) => fire("views", "click", {
+      target: { closest: (sel) => (sel === "[data-view]" ? { dataset: { view: name } } : null) },
+    }),
   };
 }
 
@@ -221,7 +224,7 @@ test("the scope line answers every one of its chips", async () => {
 
 test("the tables open, switch, and lead back into the field", async () => {
   const app = await boot();
-  app.click("btnTables");
+  app.view("tables");
   assert.equal(app.byId.get("tables").hidden, false, "the panel should open");
 
   const high = app.text("tableHigh");
@@ -294,7 +297,7 @@ test("the detail panel places a work and offers its siblings", async () => {
 
 test("the story walks, and every step really moves the field", async () => {
   const app = await boot();
-  app.click("btnStory");
+  app.view("story");
   assert.equal(app.byId.get("story").hidden, false, "the story should open");
   assert.match(app.text("storyCount"), /^1 \/ \d+$/, "it should start at the first step");
   assert.ok(app.byId.get("storyBack").disabled, "there is nothing before the first step");
@@ -319,6 +322,46 @@ test("the story walks, and every step really moves the field", async () => {
   // The last step leaves you in the field rather than looping or congratulating.
   app.click("storyNext");
   assert.equal(app.byId.get("story").hidden, true, "the story should let go at the end");
+});
+
+test("a reading recomposes the footer and leaves the field where it was", async () => {
+  const app = await boot();
+  const vacant = (id) => app.byId.get(id).classList.contains("is-vacant");
+
+  // In the field, the field's controls are live.
+  assert.ok(!vacant("findWrap"), "FIND belongs to the field");
+  assert.ok(!vacant("schoolWrap"), "SCHOOL belongs to the field");
+  assert.ok(!vacant("timelapseWrap"), "TIMELAPSE belongs to the field");
+
+  // Narrow, so there is a state worth preserving across a switch.
+  app.byId.get("search").value = "vermeer";
+  app.fire("search", "input");
+  app.frame();
+  const before = app.text("scope");
+
+  app.view("tables");
+  // The tables are read, not steered: leaving a search box live over a panel
+  // that does not use it is an invitation to type into nothing.
+  assert.ok(vacant("findWrap"), "FIND should be put away in the tables");
+  assert.ok(vacant("timelapseWrap"), "TIMELAPSE should be put away in the tables");
+
+  // Back from the tables, and nothing was lost on the way: the tables are a
+  // second reading of the same field, not a place you go instead of it.
+  app.view("field");
+  app.frame();
+  assert.equal(app.text("scope"), before,
+    "the field should be exactly where the tables were opened over it");
+  assert.ok(!vacant("findWrap"), "the field's controls should come back");
+
+  app.view("story");
+  // The story drives the field itself; a school changed mid-step would leave
+  // the sentence describing something that is no longer there.
+  assert.ok(vacant("schoolWrap"), "SCHOOL should be inert during the story");
+  assert.ok(!vacant("timelineWrap"), "the strip stays: several steps are about it");
+  // And it legitimately discards what you had narrowed to -- setting the field
+  // is what a step *is* -- so it says so rather than doing it in silence.
+  assert.match(app.text("hint"), /TAKES THE FIELD/,
+    "losing the view to the story should be announced");
 });
 
 test("the opening hint is spent by the first touch of the field", async () => {

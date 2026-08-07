@@ -22,6 +22,7 @@ import { Field, CHROMA_AXIS } from "./field.js";
 import { Nebula } from "./nebula.js";
 import { Stats, RANK_MIN_WORKS } from "./stats.js";
 import { STEPS } from "./story.js";
+import { VIEWS, VIEW_NAMES, applyView } from "./views.js";
 import { perf } from "./perf.js";
 
 const PLAY_YEARS_PER_SEC = 7.5;   // the timelapse crawl
@@ -54,8 +55,11 @@ const el = {
   natFilter: $("natFilter"),
   search: $("search"), searchCount: $("searchCount"), searchList: $("searchList"),
   btnTimelapse: $("btnTimelapse"), btnPlay: $("btnPlay"),
-  btnInfo: $("btnInfo"), btnTables: $("btnTables"), btnStory: $("btnStory"),
-  foot: $("foot"),
+  btnInfo: $("btnInfo"), foot: $("foot"), views: $("views"),
+  // The footer's control groups, as groups: a reading claims or releases each
+  // of these whole rather than button by button. See views.js CONTROLS.
+  cursor: $("cursor"), findWrap: $("findWrap"), schoolWrap: $("schoolWrap"),
+  timelapseWrap: $("timelapseWrap"), timelineWrap: $("timelineWrap"),
   tables: $("tables"), tablesClose: $("tablesClose"),
   tableBy: $("tableBy"), tableMeasure: $("tableMeasure"),
   tableHigh: $("tableHigh"), tableLow: $("tableLow"),
@@ -82,6 +86,7 @@ const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").match
 
 const state = {
   data: null, field: null, stats: null,
+  view: "field",         // which reading is in front
   tableBy: "artist",     // what the tables group by
   tableMeasure: "chroma",
   step: -1,              // position in the story, -1 when not in it
@@ -537,6 +542,9 @@ function writeURL() {
   // written alongside it and the link works even for a reader who follows it
   // into a build where the story has been rewritten.
   set("step", state.step >= 0 ? String(state.step + 1) : null);
+  // Which reading. Omitted for the field, so an ordinary link stays the short
+  // one it has always been and only a departure from the default is spelled.
+  set("view", state.view === "field" ? null : state.view);
   const qs = q.toString();
   const next = `${location.pathname}${qs ? `?${qs}` : ""}${location.hash}`;
   if (next === `${location.pathname}${location.search}${location.hash}`) return;
@@ -597,8 +605,11 @@ function applyURL() {
      rather than opening nothing. */
   const step = Number(q.get("step"));
   if (Number.isInteger(step) && step >= 1) {
-    showStory(true);
+    setView("story", { fromURL: true });
     setStep(Math.min(step, STEPS.length) - 1);
+  } else if (VIEW_NAMES.includes(q.get("view"))) {
+    // A reading without a step: the tables, or the story at its beginning.
+    setView(q.get("view"));
   }
 }
 
@@ -1305,8 +1316,11 @@ function bindInput() {
     if (state.near === state.selected) clearNear(); else setNear(state.selected);
   });
   /* --- the tables --- */
-  el.btnTables.addEventListener("click", () => showTables(el.tables.hidden));
-  el.tablesClose.addEventListener("click", () => showTables(false));
+  el.views.addEventListener("click", (event) => {
+    const button = event.target.closest("[data-view]");
+    if (button) setView(button.dataset.view);
+  });
+  el.tablesClose.addEventListener("click", () => setView("field"));
   el.tableBy.addEventListener("click", (event) => {
     const button = event.target.closest("[data-by]");
     if (!button) return;
@@ -1326,13 +1340,12 @@ function bindInput() {
   });
 
   /* --- the story --- */
-  el.btnStory.addEventListener("click", () => showStory(el.story.hidden));
-  el.storyClose.addEventListener("click", () => showStory(false));
+  el.storyClose.addEventListener("click", () => setView("field"));
   el.storyBack.addEventListener("click", () => setStep(state.step - 1));
   el.storyNext.addEventListener("click", () => {
     // The last step does not loop and does not congratulate you. It leaves you
     // in the field, with the controls exactly where the story put them.
-    if (state.step >= STEPS.length - 1) showStory(false);
+    if (state.step >= STEPS.length - 1) setView("field");
     else setStep(state.step + 1);
   });
   el.storyDots.addEventListener("click", (event) => {
@@ -1341,15 +1354,13 @@ function bindInput() {
   });
 
   el.btnInfo.addEventListener("click", () => {
+    setView("field");
     el.about.hidden = false;
-    showTables(false);
-    showStory(false);
   });
   // The panel keeps the method and hands the argument on: anyone who opened it
   // wanting to know what they are looking at should be walked, not read to.
   el.aboutStory.addEventListener("click", () => {
-    el.about.hidden = true;
-    showStory(true);
+    setView("story");
   });
   el.aboutClose.addEventListener("click", () => { el.about.hidden = true; });
   el.detailClose.addEventListener("click", hideDetail);
@@ -1358,9 +1369,7 @@ function bindInput() {
   window.addEventListener("keydown", (event) => {
     if (event.key === "Escape") {
       hideDetail();
-      el.about.hidden = true;
-      showTables(false);
-      showStory(false);
+      setView("field");
       return;
     }
     /* In the story the arrows walk the steps rather than the years. Both are
@@ -1531,16 +1540,6 @@ function paintTables() {
   }
 }
 
-function showTables(on) {
-  el.tables.hidden = !on;
-  el.btnTables.setAttribute("aria-pressed", String(on));
-  if (on) {
-    hideDetail();
-    el.about.hidden = true;
-    paintTables();
-  }
-}
-
 /** A row was pressed: narrow the field to it and get out of the way. */
 function enterFromTable(key) {
   if (state.tableBy === "school") {
@@ -1555,7 +1554,7 @@ function enterFromTable(key) {
     setSchools(-1);
     setQuery(key);
   }
-  showTables(false);
+  setView("field");
   spendHint();
 }
 
@@ -1603,14 +1602,45 @@ function setStep(index) {
     + `aria-label="Step ${i + 1}"></button>`).join("");
 }
 
-function showStory(on) {
-  el.story.hidden = !on;
-  el.btnStory.setAttribute("aria-pressed", String(on));
-  if (on) {
-    showTables(false);
-    el.about.hidden = true;
+/* ---------- the readings ----------
+ *
+ * One question at the top, three answers, and choosing one recomposes the
+ * footer so only its own controls are live.
+ *
+ * This is not a mode system in the usual sense, and the difference matters:
+ * there is one dataset, one field, one set of measurements underneath all of
+ * them. A reading only decides which is in front and which controls can act.
+ * The field keeps its whole state across a switch — leave the tables and it is
+ * exactly where you left it, still narrowed to whatever you had narrowed it to.
+ */
+function setView(next, { fromURL = false } = {}) {
+  const view = VIEWS[next] ? next : "field";
+  state.view = view;
+
+  el.tables.hidden = view !== "tables";
+  el.story.hidden = view !== "story";
+  el.about.hidden = true;
+
+  for (const button of el.views.children) {
+    button.setAttribute("aria-pressed", String(button.dataset.view === view));
+  }
+  applyView(view, (id) => el[id] ?? null);
+
+  if (view === "tables") {
+    hideDetail();
+    paintTables();
+  }
+  if (view === "story") {
     spendHint();
-    setStep(0);
+    /* The story sets the field on every step, which is the whole of what it
+       is — but that means entering it discards whatever you had narrowed to,
+       and doing that in silence is the same fault as the two questions putting
+       each other away without a word. Said, and only when there is something
+       to lose. */
+    if (narrowed()) note("THE STORY TAKES THE FIELD — YOUR VIEW IS SET ASIDE");
+    // A link into a step sets the step itself; entering the story by pressing
+    // it starts at the beginning.
+    if (!fromURL) setStep(0);
   } else {
     state.step = -1;
   }
@@ -1900,6 +1930,7 @@ async function compose(data) {
   bindInput();
   setLayout(true);
   setMode("all");
+  setView("field");   // establishes which controls are live before anything is shown
   lockWidths();
   // Widths measured in a fallback face are wrong once the real one arrives.
   if (document.fonts?.ready) document.fonts.ready.then(lockWidths);

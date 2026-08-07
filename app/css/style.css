@@ -79,7 +79,17 @@ body { display: flex; flex-direction: column; }
   display: flex; flex-direction: column; gap: 7px;
 }
 
-.hud__brand { display: flex; flex-direction: column; gap: 2px; margin-right: auto; }
+/* Equal flex on the two sides, so the menu between them sits at the true
+   centre of the bar rather than wherever the left side happens to end. The
+   scope line grows and shrinks constantly as you narrow, and a menu that
+   drifted with it would be a target that moves while you reach for it.
+   min-width: 0 because both sides hold text that must be allowed to wrap
+   rather than force the bar wider than the window. */
+.hud__brand, .hud__right {
+  flex: 1 1 0; min-width: 0;
+  display: flex; flex-direction: column; gap: 2px;
+}
+.hud__right { flex-direction: row; align-items: center; justify-content: flex-end; gap: 20px; }
 .hud__title {
   color: var(--text-bright); font-weight: 700;
   letter-spacing: .34em; font-size: 12px;
@@ -128,6 +138,23 @@ body { display: flex; flex-direction: column; }
 }
 .scope__clear:hover, .scope__copy:hover { color: var(--accent); border: none; }
 .scope__copy { font-size: 11px; }
+
+/* ---------- the readings ----------
+   One question, three answers, at the top and in the middle. Centred by giving
+   the two sides equal flex rather than by margins: the scope line on the left
+   changes width constantly as you narrow, and a menu that drifted with it
+   would be a moving target. */
+.views { display: flex; gap: 0; flex: 0 0 auto; }
+.views button {
+  border-radius: 0; margin-left: -1px; letter-spacing: .16em;
+  font-size: 10px; padding: 6px 14px;
+}
+.views button:first-child { margin-left: 0; }
+/* The reading you are in is the one lit. This is the same latch the timelapse
+   button uses, and it means the same thing: a state, not an action. */
+.views button[aria-pressed="true"] {
+  color: var(--accent); border-color: var(--accent); background: #00ff9d0f;
+}
 
 .readout { display: flex; gap: 20px; margin: 0; }
 .readout > div { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; }
@@ -640,6 +667,18 @@ button[aria-pressed="true"] {
      is one wrap too many at this width. */
   .scope__whole { display: none; }
   .scope { gap: 4px; }
+  /* The bar becomes two rows: brand and menu cannot share 360px. The menu goes
+     full width on its own line, which is also where it is easiest to hit. */
+  .hud--top { flex-wrap: wrap; row-gap: 8px; }
+  .views { order: 3; flex: 1 0 100%; }
+  .views button { flex: 1 1 0; padding: 6px 4px; letter-spacing: .1em; }
+  .hud__brand, .hud__right { flex: 1 1 auto; }
+  /* The story sits over the field, which is small here: give it the width and
+     keep it clear of the footer, the same treatment the panels get. */
+  .story { left: 7px; right: 7px; width: auto; bottom: calc(var(--foot-h) + 10px); }
+  .panel--tables { right: 7px; left: 7px; width: auto; transform: none;
+                   bottom: auto; top: 50%; translate: 0 -50%; }
+  .tables__pair { flex-direction: column; gap: 16px; }
   .timeline__label { display: none; }
   .filter { margin-left: 0; }
   /* The list is anchored to the FIND control, right: 0, 330px wide. On a 360px
