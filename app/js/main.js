@@ -1160,14 +1160,38 @@ function bindInput() {
   el.timeline.addEventListener("pointerup", releaseStrip);
   el.timeline.addEventListener("pointercancel", releaseStrip);
 
-  /* --- the field: a tap opens a painting; in the timelapse a drag also scrubs --- */
+  /* --- the field: a tap opens a painting; in the timelapse a drag also scrubs ---
+   *
+   * Every one of these listeners is on the stage rather than on the canvas,
+   * because a drag has to keep working after the pointer has left the picture.
+   * But the stage also *contains* the story panel, and the panel has buttons.
+   *
+   * That combination broke them completely. A press on NEXT bubbled to the
+   * stage, the stage called setPointerCapture, and from that moment every
+   * pointer event for that finger belonged to the stage — so the pointerup
+   * landed there too, no click was ever delivered to the button, and the tap
+   * was instead read as a tap on the field underneath. The story opened and
+   * then could not be walked.
+   *
+   * So a gesture is the field's only when it starts on the field. The test is
+   * `target !== el.field` rather than a list of overlays to exclude: the axes
+   * line, the hint and the hover chip are all `pointer-events: none`, so the
+   * canvas is the only thing inside the stage that can be a target unless
+   * something has deliberately been put over it — and anything deliberately
+   * put over it should keep its own clicks.
+   */
   let drag = null;
   el.stage.addEventListener("pointerdown", (event) => {
+    if (event.target !== el.field) return;   // chrome over the field, not the field
     spendHint();   // you have touched the field; you no longer need telling what it is
     el.stage.setPointerCapture(event.pointerId);
     drag = { x: event.clientX, from: state.cursor, moved: 0 };
   });
   el.stage.addEventListener("pointermove", (event) => {
+    // While a drag is running the pointer is captured by the stage, so the
+    // target is the stage and not the canvas. The guard above is about where a
+    // gesture *starts*; once one is under way it owns the pointer.
+    if (!drag && event.target !== el.field) { hideChip(); return; }
     const rect = el.stage.getBoundingClientRect();
     const px = event.clientX - rect.left, py = event.clientY - rect.top;
 

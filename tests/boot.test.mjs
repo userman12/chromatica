@@ -67,10 +67,20 @@ function makeEl(id = "", tag = "div") {
     scrollIntoView() {}, focus() {}, blur() {}, select() {},
     addEventListener(type, fn) { listeners.set(type, fn); },
     removeEventListener(type) { listeners.delete(type); },
-    setPointerCapture() {}, releasePointerCapture() {},
+    /* Pointer capture is recorded rather than ignored, and that is the whole
+       reason this stub can see a real class of bug. In a browser, capturing a
+       pointer on an ancestor retargets every later event for that pointer to
+       the ancestor — so the click never reaches the button that was pressed.
+       A stub that treats setPointerCapture as a no-op and then delivers the
+       click anyway will happily pass a build where nothing is clickable. */
+    setPointerCapture() { captures.push(el); },
+    releasePointerCapture() {},
   };
   return el;
 }
+
+/** Elements that have seized a pointer since the last press began. */
+const captures = [];
 
 /** Boot the app once and hand back the handles a test needs to drive it. */
 async function boot() {
@@ -137,6 +147,24 @@ async function boot() {
     text: (id) => {
       const node = byId.get(id);
       return node ? (node.textContent || node.innerHTML || "") : null;
+    },
+    /* A real press on something inside the stage, in the order a browser does
+       it: pointerdown reaches the stage by bubbling and carries the pressed
+       element as its target, then pointerup, and only then the click — and the
+       click is delivered *only if no ancestor seized the pointer along the
+       way*, because a captured pointer retargets the click away from the
+       button. Returns whether the click was delivered.
+
+       Anything reachable by pointer inside the field's stage has to be pressed
+       this way to mean anything. `click()` alone takes a path browsers do not. */
+    press(id, { x = 120, y = 120 } = {}) {
+      const target = byId.get(id);
+      captures.length = 0;
+      fire("stage", "pointerdown", { target, pointerId: 1, clientX: x, clientY: y });
+      fire("stage", "pointerup", { target, pointerId: 1, clientX: x, clientY: y });
+      const stolen = captures.some((node) => node !== target);
+      if (!stolen) fire(id, "click", { target });
+      return !stolen;
     },
     scope: (key) => fire("scope", "click", {
       target: { closest: (sel) => (sel === "[data-scope]" ? { dataset: { scope: key } } : null) },
@@ -388,11 +416,53 @@ test("compare puts two schools against one ruler and says what it found", async 
   assert.notEqual(app.text("compareFiguresB"), before, "the second side should change");
 });
 
+test("chrome sitting over the field keeps its own clicks", async () => {
+  /* The regression this exists for, and the reason it is written this way.
+   *
+   * The story panel lives inside <main class="stage">, because it is anchored
+   * over the field and the field recomposes underneath each sentence. But the
+   * stage owns the pointer handlers, and its pointerdown called
+   * setPointerCapture -- so a press on NEXT bubbled up, the stage seized the
+   * pointer, the pointerup landed on the stage rather than the button, no
+   * click was ever delivered, and the tap was read as a tap on the field
+   * beneath. The story opened and could not be walked.
+   *
+   * The old test could not see it because it fired `click` straight at the
+   * button, which is the one path a real browser does not take. This models
+   * the real order: pointerdown reaches the stage by bubbling, carrying the
+   * button as its target, and only afterwards does the click arrive.
+   */
+  const app = await boot();
+  app.view("story");
+  const first = app.text("storyCount");
+
+  const delivered = app.press("storyNext");
+  assert.ok(delivered,
+    "the stage seized the pointer from a button that sits over it, so no click "
+    + "was ever delivered — the story cannot be walked");
+  assert.notEqual(app.text("storyCount"), first, "NEXT should advance the story");
+  assert.equal(app.byId.get("detail").hidden, true,
+    "a press on the story must not also poke the field beneath it");
+
+  // Every other control over the field, for the same reason.
+  assert.ok(app.press("storyBack"), "BACK must be clickable");
+  assert.ok(app.press("storyClose"), "the close button must be clickable");
+
+  // And the field itself still works: the guard is about where a gesture
+  // starts, not a blanket refusal to listen.
+  app.view("field");
+  app.press("field", { x: 400, y: 300 });
+  assert.ok(captures.includes(app.byId.get("stage")),
+    "a press on the canvas should still begin a field gesture");
+});
+
 test("the opening hint is spent by the first touch of the field", async () => {
   const app = await boot();
   const hint = app.byId.get("hint");
   assert.ok(!hint.classList.contains("is-spent"), "the hint starts visible");
-  app.fire("stage", "pointerdown", { clientX: 100, clientY: 100, pointerId: 1 });
+  // Targeted at the canvas: a gesture is the field's only when it starts there.
+  app.fire("stage", "pointerdown",
+    { target: app.byId.get("field"), clientX: 100, clientY: 100, pointerId: 1 });
   assert.ok(hint.classList.contains("is-spent"), "it goes once you have used the field");
 });
 
