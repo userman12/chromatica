@@ -23,16 +23,20 @@ jobs:
   test:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      # Majors are pinned and deliberately current. GitHub deprecated the Node
+      # 20 runtime and was force-running these on Node 24, which works until it
+      # does not -- and since `deploy` now needs `test`, a workflow that breaks
+      # is not a skipped test run, it is nothing published.
+      - uses: actions/checkout@v7
 
       # The suite is built into the two runtimes the project already uses:
       # node --test and unittest. Nothing is installed to run the tests
       # themselves — the pip step below installs the *pipeline*, which is also
       # the only thing that proves the pinned requirements still resolve.
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: "22"
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.11"
           cache: pip
@@ -56,11 +60,11 @@ jobs:
       name: github-pages
       url: ${{ steps.deploy.outputs.page_url }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       # app/ is plain static files — no bundler, no npm install, nothing to build.
-      - uses: actions/configure-pages@v5
-      - uses: actions/upload-pages-artifact@v3
+      - uses: actions/configure-pages@v6
+      - uses: actions/upload-pages-artifact@v5
         with:
           path: app
       - id: deploy
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@v5

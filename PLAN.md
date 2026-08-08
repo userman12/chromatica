@@ -103,16 +103,76 @@ ciò che serve agli aggregati.
 - [x] **6.2** Scala condivisa: `CHROMA_AXIS` è già fisso, quindi i due lati sono
       già confrontabili.
 
+### Fase 7 — manutenzione: la card non può più mentire ✅
+*Fatta il 2026-08-08. 112 test verdi (50 JS, 62 Python).*
+*Chiude i punti 3.6 e 3.7 di `~/Desktop/chromatica-analisi-ui-ux.md`.*
+
+- [x] **7.1** Impronta nel PNG. `app/og.png` scrive in un chunk `tEXt` i tre
+      numeri del dataset da cui è stato generato, e il test li confronta con
+      `meta`. Serviva perché la card **stampa dei conteggi nella propria
+      didascalia** ed era generata da un dataset che cambia: ricostruire la
+      collezione e dimenticare lo stadio 6 lasciava una card vecchia con una
+      didascalia falsa, e il deploy passava verde — un PNG stantio è un PNG
+      validissimo. Confrontata via impronta e non via `mtime`, perché in CI un
+      checkout pulito dà a tutti i file lo stesso timestamp: la guardia ovvia è
+      proprio quella che non può funzionare.
+      *Verificata sabotando la card con i numeri del build precedente: test
+      rosso, deploy bloccato.*
+- [x] **7.2** Action della CI ai major correnti. L'analisi diceva `@v4 → @v5`
+      ed era già stantia: siamo a checkout/setup-node/setup-python **v7**,
+      configure-pages v6, upload-pages-artifact e deploy-pages v5. GitHub le
+      forzava su Node 24 dopo aver deprecato Node 20 — funziona finché non
+      funziona più, e con `deploy` che dipende da `test` un workflow rotto non
+      è un test saltato, è niente pubblicato.
+
 ---
 
 ## Verifica
 
 Ogni fase chiude con:
-- `node --test tests/field.test.mjs` e `python -m unittest discover -s tests`
-- lo smoke test che avvia `main.js` contro uno stub DOM e guida i controlli
-- test nuovi per il codice nuovo (`stats.js` ha aritmetica: va testata)
+- `node --test tests/*.mjs` — **il glob, non la directory**: `node --test tests/`
+  tratta il percorso come un modulo da eseguire e fallisce
+- `.venv/bin/python -m unittest discover -s tests`
+- test nuovi per il codice nuovo — `stats.js` ha aritmetica, `story.js` ha
+  affermazioni numeriche, ed entrambe vanno verificate contro il dataset
 
 **Limite noto e dichiarato**: in questa sessione non è disponibile un browser, e
 lo stub DOM non disegna. Tutto ciò che riguarda la *resa* — layout, spaziature,
 il fatto che il footer non salti davvero — va guardato a schermo prima del
 merge. È l'unica parte di questo piano che non posso verificare io.
+
+---
+
+## Come provarlo in locale
+
+```bash
+cd ~/Projects/chromatica
+python3 -m http.server 8765 --directory app
+# poi apri http://localhost:8765
+```
+
+Un server serve davvero: `app/js/main.js` è un modulo ES e fa `fetch` del
+dataset, e aprire `index.html` con un doppio click lo blocca su entrambe le
+cose per via di `file://`.
+
+**Cosa guardare per primo**, in ordine di rischio — sono le cose che nessun test
+di questa sessione ha potuto vedere:
+
+| | |
+|---|---|
+| **Il menù in alto** | Quattro voci centrate. Passando da una all'altra il footer deve cambiare *senza che il campo salti*: se la nuvola si sposta di qualche pixel, un controllo sta uscendo dal flusso invece che diventare `visibility: hidden`. |
+| **La riga di stato** | Restringi a una scuola, cerca qualcosa, apri il timelapse: devono comparire dei chip, e ognuno deve togliere **solo** il proprio vincolo. Con niente ristretto la riga dice invece la dimensione della collezione. |
+| **A 360px di larghezza** | Il punto più fragile. Il menù passa a riga propria, la lista risultati si aggancia al viewport, i pannelli diventano a colonna singola. Da provare con gli strumenti di sviluppo o su un telefono vero. |
+| **STORY** | Sette passi; il campo deve ricomporsi sotto ogni frase. L'ultimo passo lascia il campo così com'è invece di richiudersi su sé stesso. |
+| **COMPARE** | Apre su olandesi/italiani. La tacca su ogni barra è la posizione dell'altra scuola. |
+
+Per rigenerare il dataset o la card serve il venv:
+
+```bash
+python3 -m venv .venv && .venv/bin/pip install -r pipeline/requirements.txt
+.venv/bin/python pipeline/04_build.py      # -> app/data/chromatica.json
+.venv/bin/python pipeline/06_og_image.py   # -> app/og.png   (sempre dopo il 04)
+```
+
+Lo stadio 06 va **sempre** rilanciato dopo il 04, ed è esattamente ciò che la
+fase 7.1 rende impossibile dimenticare in silenzio.

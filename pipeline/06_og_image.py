@@ -25,7 +25,7 @@ import sys
 from pathlib import Path
 
 import numpy as np
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image, ImageDraw, ImageFont, PngImagePlugin
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import config as C
@@ -351,6 +351,27 @@ def caption(img, meta):
     return img
 
 
+# The card states a painting count and a colour count in its own caption, and
+# it is generated from a dataset that changes. Nothing linked the two: rebuild
+# the collection, forget this stage, and the card keeps showing the old field
+# with a caption that is now false -- and the deploy goes green, because a
+# stale PNG is a perfectly valid PNG.
+#
+# So the figures it was built from are written into the file, in a tEXt chunk,
+# and the test suite compares them against the dataset. This is checked rather
+# than the file's timestamp because a fresh CI checkout gives every file the
+# same mtime, so the obvious guard is the one that cannot work.
+STAMP_KEY = "chromatica"
+
+
+def stamp(meta):
+    return json.dumps({
+        "totalPaintings": meta["totalPaintings"],
+        "totalCells": meta["totalCells"],
+        "generatedAt": meta["generatedAt"],
+    }, sort_keys=True, separators=(",", ":"))
+
+
 def main():
     data = json.loads(C.OUT_JSON.read_text())
     meta = data["meta"]
@@ -360,10 +381,14 @@ def main():
     img = render(field)
     img = caption(img, meta)
 
+    info = PngImagePlugin.PngInfo()
+    info.add_text(STAMP_KEY, stamp(meta))
+
     out = C.APP / "og.png"
-    img.save(out, "PNG", optimize=True)
+    img.save(out, "PNG", optimize=True, pnginfo=info)
     kb = out.stat().st_size / 1024
     print(f"wrote {out.relative_to(C.ROOT)}  {kb:.0f} KB")
+    print(f"stamped {stamp(meta)}")
     if kb > 1024:
         print("  ! over 1 MB -- some crawlers refuse to fetch that")
 

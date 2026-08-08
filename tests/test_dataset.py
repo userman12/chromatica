@@ -201,6 +201,51 @@ class TestSocialCard(DatasetCase):
             self.assertEqual(img.size, (int(width.group(1)), int(height.group(1))),
                              "the declared preview size is not the file's size")
 
+    def test_the_card_was_built_from_this_dataset(self):
+        """The one check that stops the card going quietly stale.
+
+        og.png prints a painting count and a colour count in its own caption,
+        and it is generated from a dataset that changes. Nothing linked the
+        two: rebuild the collection, forget stage 6, and the card keeps showing
+        the old field with a caption that is now false -- and the deploy passes,
+        because a stale PNG is a perfectly valid PNG.
+
+        Compared through a stamp written into the file rather than through
+        mtimes: a fresh CI checkout gives every file the same timestamp, so the
+        obvious guard is the one that cannot work.
+        """
+        card = ROOT / "app" / "og.png"
+        if not card.exists():
+            self.skipTest("card not built")
+        try:
+            from PIL import Image
+        except ImportError:
+            self.skipTest("Pillow not installed")
+        with Image.open(card) as img:
+            raw = img.text.get("chromatica")
+        self.assertIsNotNone(
+            raw, "og.png carries no stamp -- rebuild it with pipeline/06_og_image.py")
+        stamped = json.loads(raw)
+        self.assertEqual(
+            stamped,
+            {"totalPaintings": self.meta["totalPaintings"],
+             "totalCells": self.meta["totalCells"],
+             "generatedAt": self.meta["generatedAt"]},
+            "og.png was built from a different dataset than the one shipping; "
+            "rerun pipeline/06_og_image.py")
+
+    def test_the_caption_states_the_real_figures(self):
+        """The stamp says which dataset it came from; this says the caption
+        agrees with it. A card rebuilt correctly but captioned from a stale
+        template would pass the test above and still be wrong on screen."""
+        card = ROOT / "app" / "og.png"
+        if not card.exists():
+            self.skipTest("card not built")
+        head = (ROOT / "app" / "index.html").read_text()
+        for value in (f"{self.meta['totalPaintings']:,}", f"{self.meta['totalCells']:,}"):
+            self.assertIn(value, head,
+                          f"{value} is not in the head; og:description is stale")
+
     def test_the_card_is_small_enough_to_be_fetched(self):
         card = ROOT / "app" / "og.png"
         if not card.exists():
