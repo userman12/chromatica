@@ -51,8 +51,7 @@ const el = {
   statSpanCell: $("statSpanCell"), statWindowCell: $("statWindowCell"),
   stage: $("stage"), field: $("field"), hint: $("hint"), hoverchip: $("hoverchip"),
   axes: $("axes"), btnLayout: $("btnLayout"),
-  cursorLabel: $("cursorLabel"), cursorValue: $("cursorValue"),
-  cursorRange: $("cursorRange"), cursorSpan: $("cursorSpan"),
+  cursorValue: $("cursorValue"),
   natFilter: $("natFilter"),
   search: $("search"), searchCount: $("searchCount"), searchList: $("searchList"),
   btnTimelapse: $("btnTimelapse"), btnPlay: $("btnPlay"),
@@ -210,12 +209,7 @@ function lockWidths() {
   const wholeSpan = span(F.y0, F.y1);
   lock(el.btnLayout, ["CHROMATIC PLANE", "CHRONOLOGY"]);
   lock(el.btnPlay, ["❚❚", "▶"]);
-  lock(el.cursorLabel, ["SHOWING", "YEAR"]);
-  lock(el.cursorValue, [
-    { text: "ALL YEARS", className: "cursor__year is-word" },
-    { text: String(F.y1), className: "cursor__year" },
-  ]);
-  lock(el.cursorSpan, [wholeSpan]);
+  lock(el.cursorValue, [String(F.y1)]);
   lock(el.statWorks, [num(works)]);
   lock(el.statColours, [num(F.n)]);
   lock(el.statSpan, [wholeSpan, "—"]);
@@ -356,7 +350,6 @@ function paintReadout() {
     el.timeline.setAttribute("aria-valuenow", year);
     el.timeline.setAttribute("aria-valuetext", `${year}, ${num(s.works)} works in the window`);
   }
-  put(el.cursorSpan, "cursorSpan", shown);
 }
 
 /**
@@ -653,10 +646,9 @@ function setMode(mode, { year = null, play = null } = {}) {
   // Not `hidden`: see .is-vacant. These two keep their space in the footer in
   // both modes, so switching mode cannot resize the field above them.
   el.btnPlay.classList.toggle("is-vacant", !timed);
-  el.cursorRange.classList.toggle("is-vacant", !timed);
-  el.cursorLabel.textContent = timed ? "YEAR" : "SHOWING";
-  el.cursorValue.classList.toggle("is-word", !timed);
-  if (!timed) el.cursorValue.textContent = "ALL YEARS";
+  // The scrub position exists only while there is one. Vacant rather than
+  // hidden, as everywhere in this footer: the field is a canvas above it.
+  el.cursor.classList.toggle("is-vacant", !timed);
   paintTimelineLabel();
   paintPlay();
   paintCopy();

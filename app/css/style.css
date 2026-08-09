@@ -292,8 +292,6 @@ body { display: flex; flex-direction: column; }
    same 26px line box — enough to drop the label beside it by 3px every time the
    mode changed. Both boxes are 26px tall, so centring them holds everything. */
 .cursor { display: flex; align-items: center; gap: 8px; min-height: 26px; }
-.cursor__range { display: flex; align-items: center; gap: 6px; margin-left: 6px; }
-.cursor__range b { color: var(--text-bright); font-size: 11px; font-weight: 500; }
 .cursor__label { font-size: 8px; letter-spacing: .16em; color: #4a504c; }
 /* Present in the layout, absent from the picture. The footer sits directly under
    the field and the field is a canvas: anything that changes the height of this
@@ -306,19 +304,29 @@ body { display: flex; flex-direction: column; }
 .cursor__year {
   font-size: 21px; font-weight: 500; color: var(--accent);
   letter-spacing: .06em;
-  /* Fixed, because the two variants below are 21px and 13px and an auto line box
-     would hand the footer two different heights — the same jump again. */
+  /* Fixed rather than derived from the content: this used to swap between a
+     21px number and a 13px word, and two type sizes in one line box hand the
+     footer two different heights — which resizes the canvas above it. Only the
+     number is left, but the rule stays, because the reason it was there does. */
   line-height: 26px;
   /* tabular figures so the digits never shift horizontally while scrubbing */
   font-variant-numeric: tabular-nums;
   text-shadow: 0 0 14px #00ff9d40;
 }
-/* The whole span is a state, not a number: it should not pretend to be a reading. */
-.cursor__year.is-word { font-size: 13px; letter-spacing: .2em; text-shadow: none; }
 
-.filter { display: flex; align-items: center; gap: 7px; margin-left: auto; }
-.filter--school { margin-left: 0; }
+/* Two kinds of act, and the row should say which is which.
+   FIND and SCHOOL narrow the collection: they change *what* is in the field.
+   CHROMATIC PLANE and TIMELAPSE change how the same colours are read. They sat
+   in one undifferentiated row, so the only way to know which a control was, was
+   to press it. Grouped, with a hairline between the groups — the divider is a
+   1px rule at the panel's own line colour, not a box, because the footer is
+   already a bordered bar and a box inside a box is one frame too many. */
+.filter { display: flex; align-items: center; gap: 7px; }
+/* The question group is pushed away from the scrub position and pulled up
+   against the drawing group, so the gap in the middle of the row is the
+   division rather than an accident of how wide the search box is. */
 .filter--find { margin-left: auto; }
+.filter--school { margin-left: 0; }
 /* The answer, by name. Anchored to the FIND control and opening upward over the
    field, because it is a reading of the field and belongs beside it rather than
    in a page of its own. Narrow and capped in height: it names what matched, it
@@ -403,7 +411,10 @@ select {
 }
 select:focus-visible, button:focus-visible { outline: 1px solid var(--accent); outline-offset: 1px; }
 
-.btns { display: flex; gap: 5px; flex-wrap: wrap; }
+.btns {
+  display: flex; gap: 5px; flex-wrap: wrap; align-items: center;
+  margin-left: 14px; padding-left: 14px; border-left: 1px solid var(--line);
+}
 button {
   background: #111; color: var(--text); border: 1px solid var(--line);
   border-radius: 0; font-family: var(--mono); font-size: 10px;
@@ -716,7 +727,7 @@ button[aria-pressed="true"] {
      before the module has run. */
   :root { --foot-h: 116px; --hud-h: 58px; }
   .readout > div:nth-child(n+3) { display: none; }
-  .stage__hint, .cursor__range { display: none; }
+  .stage__hint { display: none; }
   /* The axes line stays: it is the only thing left that says what the two
      directions mean. */
   .stage__axes { letter-spacing: .1em; padding: 0 8px; }

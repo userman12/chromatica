@@ -42,10 +42,17 @@ const ctx2d = new Proxy({}, {
 
 function makeEl(id = "", tag = "div") {
   const listeners = new Map();
+  let text = "";
   const el = {
     id, tagName: tag.toUpperCase(), listeners,
     style: new Proxy({}, { get: () => "", set: () => true }),
-    dataset: {}, className: "", textContent: "", innerHTML: "",
+    /* textContent stringifies, because the DOM does. Code that assigns a
+       number here is perfectly correct in a browser and would hand a test a
+       Number instead — so an assertion about what an element *says* would be
+       comparing against the wrong type rather than the wrong text. */
+    get textContent() { return text; },
+    set textContent(value) { text = value == null ? "" : String(value); },
+    dataset: {}, className: "", innerHTML: "",
     value: "", href: "", src: "", alt: "", title: "", hidden: false,
     width: 0, height: 0, clientWidth: 1200, clientHeight: 26, children: [],
     classList: {
@@ -486,6 +493,16 @@ test("the readout never shows a constant, and never says a thing twice", async (
   assert.match(app.text("statWindow"), /^±\d+ YR$/);
   assert.ok(app.text("scope").includes("MOVING WINDOW"),
     "the scope line is the one carrying the years now");
+
+  // The same rule one row down, in the footer. The scrub position is a reading
+  // only while there is one to read; outside the timelapse this block used to
+  // say "SHOWING ALL YEARS" for the whole session, in the largest type down
+  // there, and inside it printed a WINDOW span identical to the scope chip.
+  assert.ok(!vacant("cursor"), "the scrub position is live inside the timelapse");
+  assert.match(app.text("cursorValue"), /^\d{4}$/, "and it is the year");
+  app.click("btnTimelapse");
+  app.frame();
+  assert.ok(vacant("cursor"), "outside it there is no scrub position to show");
 });
 
 test("the field demonstrates itself once, then lets go", async () => {

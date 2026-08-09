@@ -229,6 +229,36 @@ rimettendo il bug: test rosso.
 > forzato a costante e apertura disattivata. Un test verde non dimostra niente
 > finché non lo si è visto rosso per la ragione giusta.
 
+### Fase 10 — il footer dice di che tipo è ogni controllo ✅
+*2026-08-09. 116 test verdi (54 JS, 62 Python). Chiude §1.3, l'ultimo punto
+aperto dell'analisi.*
+
+- [x] **10.1** **Lo stesso difetto della fase 9, una riga più sotto.** Il blocco
+      a sinistra del footer diceva `SHOWING ALL YEARS` fuori dal timelapse — una
+      costante, nel corpo più grande del footer — e dentro aggiungeva un
+      `WINDOW 1627–1673` che stampa la **stessa identica stringa** del chip
+      della riga di stato. Resta la sola cosa viva: l'anno sotto lo scrubber,
+      che il corpo grande se lo merita perché cambia sessanta volte al secondo
+      mentre trascini. Fuori dal timelapse il blocco è vacante.
+- [x] **10.2** **Due gruppi, non una fila.** FIND e SCHOOL *restringono la
+      collezione*; CHROMATIC PLANE e TIMELAPSE *rileggono le stesse misure*.
+      Stavano in una fila indifferenziata, quindi l'unico modo di sapere che
+      tipo fosse un controllo era premerlo. Ora sono separati da un filetto di
+      1px nel colore di linea del pannello — non un riquadro, perché il footer
+      è già una barra bordata e una scatola dentro una scatola è una cornice di
+      troppo.
+
+**Il footer è passato da 12 controlli a 6**, in due gruppi nominati: tre sono
+saliti nel menù delle letture (fase 5), RESET è diventato la riga di stato
+(fase 1), e due erano letture morte rimosse qui.
+
+> **Nota sullo stub**, terza infedeltà trovata e corretta: `textContent`
+> accettava un Number e lo teneva tale, mentre il DOM lo converte in stringa.
+> Codice perfettamente corretto in un browser consegnava al test un tipo
+> sbagliato. Dopo `hidden` e la cattura del puntatore, la regola è chiara: ogni
+> volta che un test si comporta in modo strano prima di sospettare l'app va
+> chiesto se lo stub sta mentendo.
+
 ---
 
 ## Come provarlo in locale

@@ -112,14 +112,22 @@
 
 <footer class="hud hud--bottom" id="foot">
   <div class="controls">
-    <div class="cursor" id="cursor">
-      <span class="cursor__label" id="cursorLabel">SHOWING</span>
-      <span class="cursor__year" id="cursorValue">ALL YEARS</span>
-      <span class="cursor__range is-vacant" id="cursorRange">
-        <span class="cursor__label">WINDOW</span><b id="cursorSpan">—</b>
-      </span>
+    <!-- The scrub position, and nothing else.
+         This block used to say "SHOWING ALL YEARS" outside the timelapse — a
+         constant, in the largest type in the footer — and inside it added a
+         WINDOW span that printed the identical string as the scope line's year
+         chip. Both are the fault the readout above the field had: a constant
+         dressed as a reading, and an echo. What is left is the one genuinely
+         live thing, the year under the scrubber, which earns its size because
+         it changes sixty times a second while you drag. -->
+    <div class="cursor is-vacant" id="cursor">
+      <span class="cursor__label">YEAR</span>
+      <span class="cursor__year" id="cursorValue">—</span>
     </div>
 
+    <!-- What you are asking of the field. Separated from the controls that
+         change how it is drawn, because they are different kinds of act: one
+         narrows the collection, the other re-reads it. -->
     <div class="filter filter--find" id="findWrap">
       <label class="filter__label" for="search">FIND</label>
       <input id="search" type="search" autocomplete="off" spellcheck="false"
