@@ -188,6 +188,47 @@ rimettendo il bug: test rosso.
 > resa: la consegna degli eventi. Ogni volta che si mette un controllo dentro
 > `#stage` va premuto con `press()` in un test, non con `click()`.
 
+### Fase 9 — il readout e il primo impatto ✅
+*2026-08-09. 116 test verdi (54 JS, 62 Python).*
+*Chiude i punti §1.1 e §2.4 dell'analisi.*
+
+- [x] **9.1** **Il readout non mostra più una costante né una cosa due volte.**
+      L'analisi (§1.1) proponeva di nascondere SPAN e WINDOW fuori dal
+      timelapse, e **su SPAN aveva torto**: verificato interrogando il campo,
+      SPAN segue il filtro scuola — olandesi 1562–1907, italiani 1309–1905 — ed
+      è un fatto sulla collezione che vale la pena avere.
+      Il vero difetto era un altro, e l'ha rivelato la verifica: **dentro** il
+      timelapse SPAN e il chip della riga di stato stampano la *stessa identica
+      stringa*. Quindi ora WINDOW vive solo nel timelapse (fuori la sua unica
+      risposta è la parola ALL, per tutta la sessione) e SPAN solo fuori.
+      Sempre tre letture vive su quattro celle, e la cella spenta resta al suo
+      posto con `visibility` — il readout è allineato a destra e togliere una
+      colonna dal flusso farebbe scivolare le icone dei crediti a ogni pressione.
+- [x] **9.2** **Gerarchia**: WORKS più grande degli altri tre. Erano composti
+      identici, il che diceva che fossero quattro fatti di pari peso; ma COLOURS
+      è sempre circa 4,5× WORKS, e SPAN e WINDOW *qualificano* un numero invece
+      di esserlo. Più grande, non più acceso: l'accento appartiene al campo.
+- [x] **9.3** **Il campo si presenta da solo, una volta** (§2.4). Si atterrava
+      su 34.062 punti senza sapere cosa fossero: la riga sotto il campo lo
+      *dice*, ma è una frase su un'immagine invece dell'immagine. Ora dopo un
+      attimo un anello si chiude su una particella e appare il suo chip, non
+      richiesto, con un dipinto riconoscibile e l'esadecimale del colore preso
+      da lì. Tre secondi, poi lascia.
+      Insegna tutta la grammatica del pezzo — un punto è un colore, il colore
+      appartiene a un'opera, l'opera ha un nome — senza una parola di
+      istruzioni, ed è **lo stesso chip** che si otterrebbe puntando: non è una
+      finta.
+      La particella è scelta **per regola e non per indice**, come i permalink
+      nominano le opere invece di numerarle; e non parte affatto se
+      `prefers-reduced-motion`, se un link ha portato altrove, o alla prima
+      interazione *qualsiasi* — ascoltata una volta sola sulla finestra in fase
+      di cattura, perché agganciarla ai singoli controlli è una lista a cui
+      prima o poi manca una voce, e già ne mancavano tre.
+
+> Entrambe le guardie nuove sono state verificate **facendole fallire**: SPAN
+> forzato a costante e apertura disattivata. Un test verde non dimostra niente
+> finché non lo si è visto rosso per la ragione giusta.
+
 ---
 
 ## Come provarlo in locale

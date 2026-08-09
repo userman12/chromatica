@@ -82,8 +82,10 @@ function makeEl(id = "", tag = "div") {
 /** Elements that have seized a pointer since the last press began. */
 const captures = [];
 
-/** Boot the app once and hand back the handles a test needs to drive it. */
-async function boot() {
+/** Boot the app once and hand back the handles a test needs to drive it.
+ *  `search` is the query string the page is opened with, so a test can arrive
+ *  the way a shared link does. */
+async function boot({ search = "" } = {}) {
   const byId = new Map();
   const html = readFileSync(join(APP, "index.html"), "utf8");
   /* Only the ids the real markup defines, so a lookup for something that is
@@ -112,7 +114,7 @@ async function boot() {
     addEventListener(type, fn) { windowListeners.set(type, fn); },
     devicePixelRatio: 2,
   };
-  globalThis.location = { search: "", pathname: "/", hash: "", href: "/" };
+  globalThis.location = { search, pathname: "/", hash: "", href: `/${search}` };
   globalThis.history = { replaceState() {} };
   // Node defines navigator as a getter-only global, so it cannot be assigned.
   Object.defineProperty(globalThis, "navigator", {
@@ -454,6 +456,72 @@ test("chrome sitting over the field keeps its own clicks", async () => {
   app.press("field", { x: 400, y: 300 });
   assert.ok(captures.includes(app.byId.get("stage")),
     "a press on the canvas should still begin a field gesture");
+});
+
+test("the readout never shows a constant, and never says a thing twice", async () => {
+  const app = await boot();
+  const vacant = (id) => app.byId.get(id).classList.contains("is-vacant");
+  app.frame();
+
+  // Outside the timelapse WINDOW's only possible answer is the word ALL, for
+  // the whole session, set like the numbers that do change.
+  assert.ok(vacant("statWindowCell"), "WINDOW is not a reading outside the timelapse");
+  assert.ok(!vacant("statSpanCell"), "SPAN is a reading outside it");
+
+  // And SPAN is a reading outside it: it follows the school filter. This is
+  // the assertion that caught the analysis being wrong about SPAN being dead.
+  const whole = app.text("statSpan");
+  app.byId.get("natFilter").value = "3";
+  app.fire("natFilter", "change");
+  app.frame();
+  assert.notEqual(app.text("statSpan"), whole,
+    "SPAN must follow the school filter — it is not a constant");
+
+  // Inside the timelapse they swap, because there the scope line already
+  // prints the same years as SPAN would.
+  app.click("btnTimelapse");
+  app.frame();
+  assert.ok(!vacant("statWindowCell"), "WINDOW is a reading inside the timelapse");
+  assert.ok(vacant("statSpanCell"), "SPAN is duplicated by the scope line inside it");
+  assert.match(app.text("statWindow"), /^±\d+ YR$/);
+  assert.ok(app.text("scope").includes("MOVING WINDOW"),
+    "the scope line is the one carrying the years now");
+});
+
+test("the field demonstrates itself once, then lets go", async () => {
+  const app = await boot();
+  /* A frame first, because the stub only runs the loop when asked and the
+     opening points at a particle's drawn position -- which step() computes.
+     A browser has been running rAF continuously by this point. */
+  app.frame();
+  // The opening then waits for the field to settle before pointing at anything.
+  await new Promise((r) => setTimeout(r, 1100));
+  app.frame();
+
+  const chip = app.byId.get("hoverchip");
+  assert.equal(chip.hidden, false, "the field should point at something once");
+  // It must be the real chip, not a mimed one: same content pointing produces.
+  assert.match(chip.innerHTML, /#[0-9A-F]{6}/i, "it should name the measured colour");
+  assert.match(chip.innerHTML, /COLOURS LIKE THIS ONE/,
+    "and carry the same offer a pointed-at chip carries");
+
+  // Any interaction at all ends it -- not just one on the field.
+  app.byId.get("search").value = "x";
+  app.fire("search", "input");
+  app.windowListeners.get("pointerdown")?.({});
+  app.frame();
+  assert.equal(chip.hidden, true, "it should get out of the way once you start");
+});
+
+test("the opening never fires for someone who arrived somewhere specific", async () => {
+  // A shared link names a view; opening on a different painting than the one
+  // it names would be the page talking over the person who sent it.
+  const app = await boot({ search: "?view=tables" });
+  app.frame();
+  await new Promise((r) => setTimeout(r, 1100));
+  app.frame();
+  assert.equal(app.byId.get("hoverchip").hidden, true,
+    "a link into another reading should not be interrupted");
 });
 
 test("the opening hint is spent by the first touch of the field", async () => {

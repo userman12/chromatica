@@ -48,6 +48,7 @@ const el = {
   scope: $("scope"),
   statWorks: $("statWorks"), statColours: $("statColours"),
   statSpan: $("statSpan"), statWindow: $("statWindow"),
+  statSpanCell: $("statSpanCell"), statWindowCell: $("statWindowCell"),
   stage: $("stage"), field: $("field"), hint: $("hint"), hoverchip: $("hoverchip"),
   axes: $("axes"), btnLayout: $("btnLayout"),
   cursorLabel: $("cursorLabel"), cursorValue: $("cursorValue"),
@@ -303,13 +304,34 @@ function put(node, key, value) {
 
 function paintReadout() {
   const s = state.field.stats;
+  const timed = state.mode === "time";
   const empty = s.colours === 0;
   const shown = empty ? "—" : span(s.from, s.to);
   put(el.statWorks, "works", num(s.works));
   put(el.statColours, "colours", num(s.colours));
   put(el.statSpan, "span", shown);
-  put(el.statWindow, "window",
-    state.mode === "time" ? `±${Math.round(s.sigma)} YR` : "ALL");
+  put(el.statWindow, "window", timed ? `±${Math.round(s.sigma)} YR` : "ALL");
+
+  /* Four readouts, three of them live at any moment — and never the same one
+     twice or a constant dressed as a measurement.
+
+     WINDOW is only a reading inside the timelapse. Outside it the answer is
+     literally the word ALL, for the whole session, in the same type as the
+     numbers that do change.
+
+     SPAN is the opposite, and the analysis that asked for this had it wrong:
+     it is *not* dead outside the timelapse, because it follows the school
+     filter — the Dutch here run 1562–1907 and the Italians 1309–1905, which is
+     a fact about the collection worth having. What it is instead is
+     *duplicated* inside the timelapse, where the scope line already prints the
+     identical string as its year chip. So each is shown exactly where it is
+     the only one saying it.
+
+     Vacant rather than hidden, as everywhere else: the readout is right
+     aligned, so dropping a column out of the flow would slide the credit icons
+     sideways every time the timelapse is pressed. */
+  el.statSpanCell.classList.toggle("is-vacant", timed);
+  el.statWindowCell.classList.toggle("is-vacant", !timed);
   // Matches among the works actually on screen, not in the whole dataset: with a
   // school or a year window on, those are two different numbers. Once you start
   // walking the matches the count becomes your position in them, because that is
@@ -926,6 +948,9 @@ function note(text) {
 function spendHint() {
   if (state.hintSpent) return;
   state.hintSpent = true;
+  // The opening is a demonstration for someone who has not started yet. The
+  // moment they have, it is in the way.
+  endOpening();
   if (!el.hint.classList.contains("is-note")) el.hint.classList.add("is-spent");
 }
 
@@ -1429,6 +1454,16 @@ function bindInput() {
     setCursor(Math.round(state.cursor) + dy);
   });
 
+  /* The opening is cancelled by any interaction at all, listened for once on
+     the window in the capture phase. Hanging it off the individual controls is
+     a list that would eventually be missing an entry -- and it already would
+     have been: spendHint covers the field and the strip, but not the menu, the
+     search box or the school filter, and someone who has pressed any of those
+     has plainly started and does not need to be shown how. */
+  for (const type of ["pointerdown", "keydown", "wheel"]) {
+    window.addEventListener(type, endOpening, { capture: true, once: true });
+  }
+
   /* The stage is watched, not the window. A window resize is not the only thing
      that changes the size of the field: the footer under it grows and shrinks
      with the mode, and a canvas measured for the old height is stretched by CSS
@@ -1444,10 +1479,95 @@ function bindInput() {
   new ResizeObserver(measureFoot).observe(el.foot);
 }
 
+/* ---------- the opening ----------
+ *
+ * You land on thirty-four thousand dots and the boot sequence, handsome as it
+ * is, tells you the count and nothing about what a dot is. The line under the
+ * field says every particle is one measured colour of one painting, and that
+ * is a sentence about a picture rather than the picture itself.
+ *
+ * So the field demonstrates itself once: a ring closes on one particle and its
+ * chip appears, unasked, naming a painting you may well recognise and the hex
+ * of the colour that was taken from it. Three seconds, then it lets go. It
+ * teaches the whole grammar of the thing — a dot is a colour, a colour belongs
+ * to a work, the work has a name — without a word of instruction, and it is
+ * the same chip you would have got by pointing, so nothing is being mimed.
+ *
+ * It is cancelled by the first real interaction, because someone who has
+ * already started exploring does not need to be shown how.
+ */
+const OPENING_MS = 3200;
+const OPENING_IN = 900;     // let the field settle before anything is pointed at
+
+/* Chosen by rule, not by index. A hardcoded position would point at a
+   different painting the next time the dataset is rebuilt -- the same trap the
+   permalinks avoid by naming works rather than numbering them. Titles first,
+   because a name you recognise does more teaching than an anonymous panel;
+   then a guaranteed fallback, so this cannot come up empty on a dataset that
+   happens to hold none of them. */
+const OPENING_TITLES = [
+  "De Nachtwacht", "Het melkmeisje", "Water Lilies", "Sunflowers",
+  "Wheatfield", "Self-Portrait",
+];
+
+function openingParticle() {
+  const paintings = state.data.paintings;
+  for (const title of OPENING_TITLES) {
+    const at = paintings.findIndex((p) => p.t === title);
+    if (at >= 0) return state.stats.firstParticle[at];
+  }
+  // The most saturated work in the collection: always exists, and lands on the
+  // medieval end, which is where the argument starts anyway.
+  let best = 0;
+  for (let i = 1; i < paintings.length; i++) {
+    if (state.stats.chroma[i] > state.stats.chroma[best]) best = i;
+  }
+  return state.stats.firstParticle[best];
+}
+
+let openingTimer = 0;
+
+function runOpening() {
+  if (reduceMotion) return;   // an unrequested animation is exactly what this asks to be spared
+  openingTimer = setTimeout(() => {
+    // Not if the visitor got there first, and not if a link brought them
+    // somewhere specific -- a shared view should open on what it names.
+    if (state.hintSpent || state.view !== "field" || state.selected >= 0) return;
+    const particle = openingParticle();
+    state.preview = particle;    // the ring, without opening the panel
+    state.ringAt = performance.now();
+    state.marks = true;
+    showChipAt(particle);
+    openingTimer = setTimeout(endOpening, OPENING_MS);
+  }, OPENING_IN);
+}
+
+function endOpening() {
+  clearTimeout(openingTimer);
+  openingTimer = 0;
+  if (state.preview < 0) return;
+  state.preview = -1;
+  state.marks = true;
+  hideChip();
+}
+
 /* ---------- hover ---------- */
 function showChip(px, py) {
   const hit = state.field.pick(px, py, 12);
   if (hit < 0) { hideChip(); return; }
+  fillChip(hit, px, py);
+}
+
+/** The same chip, on a particle the visitor did not point at — used by the
+ *  opening, which shows one unasked. Placed at the particle's own position, so
+ *  what appears is exactly what pointing at it would have produced. */
+function showChipAt(particle) {
+  const F = state.field;
+  if (!(F.w[particle] > 0)) return;   // not currently drawn: nothing to point at
+  fillChip(particle, F.x[particle], F.y[particle]);
+}
+
+function fillChip(hit, px, py) {
   const F = state.field;
   const p = state.data.paintings[F.owner[hit]];
   if (hit !== state.hover) {
@@ -2059,6 +2179,7 @@ async function compose(data) {
   el.boot.classList.add("boot--done");
   requestAnimationFrame(frame);
   setTimeout(() => { el.boot.hidden = true; }, 800);
+  runOpening();   // the field shows what a particle is, once, then lets go
 }
 
 init();
