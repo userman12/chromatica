@@ -141,6 +141,53 @@ lo stub DOM non disegna. Tutto ciò che riguarda la *resa* — layout, spaziatur
 il fatto che il footer non salti davvero — va guardato a schermo prima del
 merge. È l'unica parte di questo piano che non posso verificare io.
 
+*Aggiornamento del 2026-08-09*: il limite era reale e ha morso subito — vedi
+fase 8. Il difetto però non era di resa ma di **consegna degli eventi**, che lo
+stub avrebbe potuto coprire e copriva male. Ora lo copre. Quello che resta
+davvero fuori portata è solo il pixel: dove cade una cosa, quanto è larga, se
+salta.
+
+---
+
+## Fase 8 — il primo bug trovato usando la cosa ✅
+*2026-08-09. 113 test verdi (51 JS, 62 Python).*
+
+Segnalato dall'uso reale: **il racconto si apriva e NEXT non rispondeva.** Non
+era la logica dei passi, era un conflitto di eventi — ed è esattamente la classe
+di difetto che il limite dichiarato in fondo a questo file prometteva di non
+poter vedere.
+
+**Cos'era.** Il pannello STORY sta dentro `<main class="stage">`, di proposito:
+è ancorato sopra il campo e il campo si ricompone sotto ogni frase. Ma lo stage
+possiede i gestori del puntatore, e il suo `pointerdown` chiama
+`setPointerCapture`. Premendo NEXT il `pointerdown` risaliva al bottone e poi
+allo stage, lo stage sequestrava il puntatore, il `pointerup` finiva sullo stage
+invece che sul bottone, **nessun `click` veniva mai consegnato** — e per giunta
+il tocco veniva letto come un tocco sul campo sottostante. Stesso destino per
+BACK, per i pallini e per la ×.
+
+**La correzione**, una riga: una gesture appartiene al campo solo se *inizia*
+sul campo. Il test è `event.target !== el.field` invece di una lista di overlay
+da escludere, perché la riga degli assi, l'hint e il chip sono tutti
+`pointer-events: none` — il canvas è l'unica cosa dentro lo stage che possa
+essere un target, a meno che qualcosa non ci sia stato messo sopra apposta, e
+ciò che è messo sopra deve tenersi i propri click. Vale quindi anche per gli
+overlay futuri.
+
+**Perché il test non l'aveva preso, e cosa ho cambiato.** Il primo test di
+regressione che ho scritto restava verde anche rimettendo il bug: lo stub
+trattava `setPointerCapture` come no-op e consegnava il `click` dritto al
+bottone, cioè l'unico percorso che un browser non fa mai. Ora lo stub registra
+la cattura e l'helper `press()` compie la sequenza reale — `pointerdown` che
+risale allo stage portando l'elemento premuto come target, `pointerup`, e il
+`click` **solo se nessun antenato ha rubato il puntatore**. Verificato
+rimettendo il bug: test rosso.
+
+> **Cosa insegna, per le prossime volte.** Lo stub DOM copre la logica e non la
+> resa, e questo era già scritto. Ma copriva male anche una cosa che *non* è
+> resa: la consegna degli eventi. Ogni volta che si mette un controllo dentro
+> `#stage` va premuto con `press()` in un test, non con `click()`.
+
 ---
 
 ## Come provarlo in locale
