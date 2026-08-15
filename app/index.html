@@ -31,12 +31,20 @@
 </head>
 <body>
 
-<!-- One deliberate beat of a technical readout before the field appears. -->
-<div class="boot" id="boot"><pre class="boot__log" id="bootLog">CHROMATICA v0.3</pre></div>
+<!-- One deliberate beat of a technical readout before the field appears.
+     aria-hidden: it is decorative flavour text that disappears on its own in
+     about a second, not a status a screen reader needs read aloud before the
+     real page (whose content is unaffected by it) is reached. -->
+<div class="boot" id="boot" aria-hidden="true"><pre class="boot__log" id="bootLog">CHROMATICA v0.3</pre></div>
 
-<header class="hud hud--top">
+<header class="hud hud--top" id="head">
   <div class="hud__brand">
-    <span class="hud__title">CHROMATICA</span>
+    <!-- The one h1 on the page. Was a <span>: no page here had a top-level
+         heading at all, and every panel's own h2 (About, Tables, Compare,
+         Story) had nothing to nest under. Zero visual change — see
+         .hud__title's added margin: 0 in the stylesheet, which cancels the
+         browser's default h1 spacing so the fixed-height header cannot shift. -->
+    <h1 class="hud__title">CHROMATICA</h1>
     <!-- One line where there used to be three.
          The two blurb lines and the sub-line were all permanent prose: they
          described the collection and the current layout, never changed unless
@@ -97,7 +105,12 @@
        its own, because the whole point is that the field recomposes underneath
        each sentence: a modal would cover the thing being talked about. Every
        step is exactly a state the controls can reach, so it is also a link. -->
-  <aside class="story" id="story" hidden>
+  <!-- role=dialog + aria-modal: the canvas behind it has no accessible content
+       of its own (no tabindex, no ARIA — it is a pointer-driven surface by
+       design), so there is nothing meaningful for assistive tech to lose
+       access to by treating this as the sole focus. Sighted mouse users can
+       still reach the field underneath; nothing about that changes. -->
+  <aside class="story" id="story" role="dialog" aria-modal="true" aria-labelledby="storyTitle" hidden>
     <button class="story__close" id="storyClose" aria-label="Leave the story">×</button>
     <p class="story__count" id="storyCount"></p>
     <h2 class="story__title" id="storyTitle"></h2>
@@ -156,7 +169,7 @@
         <button id="btnTimelapse" aria-pressed="false" title="Move a window through time instead of showing the whole span">TIMELAPSE</button>
         <button id="btnPlay" class="is-vacant" title="Play or pause the timelapse">❚❚</button>
       </span>
-      <button id="btnInfo" title="How the colours were measured">?</button>
+      <button id="btnInfo" title="How the colours were measured" aria-label="About and method">?</button>
     </div>
   </div>
 
@@ -171,7 +184,7 @@
   </div>
 </footer>
 
-<aside class="panel panel--detail" id="detail" hidden>
+<aside class="panel panel--detail" id="detail" role="dialog" aria-modal="true" aria-labelledby="detailTitle" hidden>
   <button class="panel__close" id="detailClose" aria-label="Close">×</button>
   <div class="panel__body">
     <figure class="panel__figure"><img id="detailImg" alt="" decoding="async"></figure>
@@ -216,10 +229,10 @@
      numbers grouped by the things people actually ask about — a painter, a
      school, a museum — and ranked. It is also the way in for someone who does
      not yet know what to look for, which the field alone never offered. -->
-<aside class="panel panel--tables" id="tables" hidden>
+<aside class="panel panel--tables" id="tables" role="dialog" aria-modal="true" aria-labelledby="tablesTitle" hidden>
   <button class="panel__close" id="tablesClose" aria-label="Close">×</button>
   <div class="tables__body">
-    <h2>WHAT THE MEASUREMENTS ADD UP TO</h2>
+    <h2 id="tablesTitle">WHAT THE MEASUREMENTS ADD UP TO</h2>
     <div class="tables__controls">
       <div class="seg" id="tableBy" role="group" aria-label="Group by">
         <button data-by="artist" aria-pressed="true">PAINTERS</button>
@@ -254,10 +267,10 @@
      do. What makes it work at all is that CHROMA_AXIS is fixed rather than
      rescaled per filter, so neither side can look saturated merely by being
      the more colourful of the two. -->
-<aside class="panel panel--compare" id="compare" hidden>
+<aside class="panel panel--compare" id="compare" role="dialog" aria-modal="true" aria-labelledby="compareTitle" hidden>
   <button class="panel__close" id="compareClose" aria-label="Close">×</button>
   <div class="compare__body">
-    <h2>TWO SCHOOLS, ONE RULER</h2>
+    <h2 id="compareTitle">TWO SCHOOLS, ONE RULER</h2>
     <p class="compare__note" id="compareNote"></p>
     <div class="compare__pair">
       <section>
@@ -273,10 +286,10 @@
   </div>
 </aside>
 
-<aside class="panel panel--about" id="about" hidden>
+<aside class="panel panel--about" id="about" role="dialog" aria-modal="true" aria-labelledby="aboutTitle" hidden>
   <button class="panel__close" id="aboutClose" aria-label="Close">×</button>
   <div class="about__body">
-    <h2>CHROMATICA</h2>
+    <h2 id="aboutTitle">CHROMATICA</h2>
     <p id="aboutSource"></p>
     <p>Every particle is one real colour, taken by k-means clustering from the
       photograph of one real painting. Nothing here is decorative: no colour was

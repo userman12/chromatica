@@ -111,7 +111,11 @@ async function boot({ search = "" } = {}) {
     getElementById: (id) => byId.get(id) ?? null,
     createElement: (tag) => makeEl("", tag),
     documentElement: { style: { setProperty() {}, removeProperty() {} } },
-    body: { appendChild() {} },
+    // A real body carries a dataset, and code that publishes state onto it for
+    // the stylesheet to read is ordinary. Without one, that assignment throws
+    // during boot — and a stub that cannot be written to the way an element
+    // can is a stub that fails builds which work.
+    body: { appendChild() {}, dataset: {}, classList: { add() {}, remove() {}, toggle() {} } },
     fonts: { ready: Promise.resolve() },
     addEventListener() {},
     execCommand: () => true,
@@ -311,8 +315,8 @@ test("the detail panel places a work and offers its siblings", async () => {
 
   const era = app.byId.get("detailEra");
   assert.equal(era.hidden, false, "a 19th-century work has a thick enough era to quote");
-  assert.match(era.innerHTML, /OF ITS TIME/, "the placement should be said in words");
-  assert.match(era.innerHTML, /AGAINST [\d,]+ WORKS OF \d{4}–\d{4}/,
+  assert.match(era.innerHTML, /THAN \d+%/, "the placement should be said in words");
+  assert.match(era.innerHTML, /OF THE [\d,]+ WORKS PAINTED \d{4}–\d{4}/,
     "the era should state what it was measured against");
 
   const kin = app.byId.get("detailKin");
@@ -474,6 +478,17 @@ test("the readout never shows a constant, and never says a thing twice", async (
   // the whole session, set like the numbers that do change.
   assert.ok(vacant("statWindowCell"), "WINDOW is not a reading outside the timelapse");
   assert.ok(!vacant("statSpanCell"), "SPAN is a reading outside it");
+
+  /* The scrub position, at boot, before anything has been pressed.
+     This is the assertion that was missing, and the gap it left was a real
+     bug that shipped: the block below the field showed a permanent "YEAR —"
+     em-dash on load. The existing coverage only ever exercised the *toggle*
+     — timelapse on, assert live; timelapse off, assert vacant — and both of
+     those pass whatever the opening state is. Two mechanisms were fighting
+     over the element and the one that ran last on boot won; neither end of a
+     toggle can see that. */
+  assert.ok(vacant("cursor"),
+    "there is no scrub position before the timelapse has ever been opened");
 
   // And SPAN is a reading outside it: it follows the school filter. This is
   // the assertion that caught the analysis being wrong about SPAN being dead.

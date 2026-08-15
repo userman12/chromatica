@@ -12,11 +12,22 @@
   --accent: #00ff9d;          /* the single UI accent. never applied to artwork colour */
   --accent-dim: #00ff9d26;
   --line: #1c1c1c;
-  --text: #6f7671;
+  /* #6f7671 measured 4.25:1 against --bg — just under the 4.5:1 floor for
+     normal text (this is the page's default body colour, so it reads as
+     actual prose in the about/tables/compare panels, not incidental chrome).
+     Nudged by +6 on each channel to 4.63:1. At this size the shift is not
+     perceptible; it is not a restyle. The many *lower*-contrast greys used
+     elsewhere for secondary labels (#4a504c, #575e59, #3c423e — "lit only
+     when pointed at") are deliberate per the file header and are untouched. */
+  --text: #757c77;
   --text-bright: #c8d2cb;
   --mono: "JetBrains Mono", "IBM Plex Mono", ui-monospace, SFMono-Regular,
           Menlo, Consolas, monospace;
   --hud-h: 62px;
+  /* Overwritten by measureHead() with the header's measured height. --hud-h is
+     only its *minimum*: the bar wraps on a narrow screen and is taller than
+     the floor. Anything that has to sit clear of the header reads this. */
+  --head-h: 62px;
   /* A starting value only. measureFoot() overwrites this with the footer's
      measured height on load and on every reflow, because the footer wraps and
      no constant here can be right at every width. What reads it — the panels
@@ -91,6 +102,11 @@ body { display: flex; flex-direction: column; }
 }
 .hud__right { flex-direction: row; align-items: center; justify-content: flex-end; gap: 20px; }
 .hud__title {
+  /* Was a <span>, now the page's one h1. margin: 0 cancels the browser's
+     default heading margin (~0.67em top/bottom) — without it the fixed
+     --hud-h header would gain height it does not have and the bar would
+     shift on load. Nothing else about this rule changed. */
+  margin: 0;
   color: var(--text-bright); font-weight: 700;
   letter-spacing: .34em; font-size: 12px;
 }
@@ -187,7 +203,14 @@ body { display: flex; flex-direction: column; }
   transition: color .15s linear;
 }
 .credit__link svg { width: 12px; height: 12px; display: block; }
-.credit__link:hover, .credit__link:focus-visible { color: var(--accent); outline: none; }
+.credit__link:hover { color: var(--accent); }
+/* Was outline: none on :focus-visible with no replacement — a keyboard user
+   tabbing here had no way to see which of the two icons was focused. The
+   colour change alone is too subtle a signal on a 12px icon; the outline used
+   everywhere else in this file (1px solid var(--accent)) is added here too. */
+.credit__link:focus-visible {
+  color: var(--accent); outline: 1px solid var(--accent); outline-offset: 2px;
+}
 
 /* ---------- stage ---------- */
 .stage {
@@ -272,7 +295,7 @@ body { display: flex; flex-direction: column; }
   box-shadow: 0 6px 26px #000000cc;
 }
 .hoverchip b { color: var(--accent); font-weight: 500; display: block; }
-.hoverchip i { color: #6f7671; font-style: normal; }
+.hoverchip i { color: #757c77; font-style: normal; }
 .hoverchip code { color: var(--text); letter-spacing: .06em; }
 /* The offer, not a reading: dimmer than the measurement above it and set apart
    by a rule, so it reads as the interface speaking rather than as another
@@ -363,7 +386,7 @@ body { display: flex; flex-direction: column; }
    date is the coordinate you are looking the work up by. */
 .findlist b { color: var(--accent); font-weight: 500; font-size: 10px; flex: 0 0 62px; }
 .findlist span { color: var(--text-bright); font-size: 10px; line-height: 1.45; min-width: 0; }
-.findlist i { display: block; color: #6f7671; font-style: normal; font-size: 9px; }
+.findlist i { display: block; color: #757c77; font-style: normal; font-size: 9px; }
 .findlist .findlist__more { color: #4a504c; cursor: default; justify-content: center; font-size: 9px; letter-spacing: .14em; }
 .findlist .findlist__more:hover { background: none; }
 /* What a colour search asked, kept at the top of its own answer. Sticky rather
@@ -374,7 +397,7 @@ body { display: flex; flex-direction: column; }
 .findlist .findlist__head {
   position: sticky; top: 0; z-index: 1;
   background: #0d0d0d; border-bottom: 1px solid var(--accent-dim);
-  color: #6f7671; cursor: default; font-size: 9px; letter-spacing: .1em;
+  color: #757c77; cursor: default; font-size: 9px; letter-spacing: .1em;
   align-items: center; padding: 5px 9px;
 }
 .findlist .findlist__head:hover { background: #0d0d0d; }
@@ -414,6 +437,14 @@ select:focus-visible, button:focus-visible { outline: 1px solid var(--accent); o
 .btns {
   display: flex; gap: 5px; flex-wrap: wrap; align-items: center;
   margin-left: 14px; padding-left: 14px; border-left: 1px solid var(--line);
+}
+/* Only where there are two groups to divide. In every reading but the field
+   the controls on both sides are put away and the rule would be left
+   separating nothing from the lone "?" — a structural device decorating
+   rather than encoding, which is the same fault as the stray tick it becomes
+   when the row wraps on a phone. */
+body:not([data-view="field"]) .btns {
+  margin-left: 0; padding-left: 0; border-left: none;
 }
 button {
   background: #111; color: var(--text); border: 1px solid var(--line);
@@ -458,7 +489,7 @@ button[aria-pressed="true"] {
   box-shadow: 0 6px 26px #000000cc;
 }
 .markchip b { color: var(--text-bright); font-weight: 500; display: block; }
-.markchip i { color: #6f7671; font-style: normal; display: block; }
+.markchip i { color: #757c77; font-style: normal; display: block; }
 
 /* ---------- panels ---------- */
 .panel {
@@ -746,11 +777,45 @@ button[aria-pressed="true"] {
   /* The story sits over the field, which is small here: give it the width and
      keep it clear of the footer, the same treatment the panels get. */
   .story { left: 7px; right: 7px; width: auto; bottom: calc(var(--foot-h) + 10px); }
-  .panel--tables { right: 7px; left: 7px; width: auto; transform: none;
-                   bottom: auto; top: 50%; translate: 0 -50%; }
+  /* Anchored under the header rather than centred on the viewport. Centred at
+     82vh on an 844px screen it began at y=76 while the header — which holds
+     the very menu you press to open this — ends at 79, so the panel covered
+     the control that summons it. Pinned below the bar and bounded by the
+     footer instead: it can never overlap either. */
+  .panel--tables, .panel--compare {
+    right: 7px; left: 7px; width: auto; transform: none; translate: none;
+    top: calc(var(--head-h, var(--hud-h)) + 8px);
+    bottom: calc(var(--foot-h) + 8px);
+    max-height: none;
+  }
   .tables__pair { flex-direction: column; gap: 16px; }
+  .compare__pair { flex-direction: column; gap: 14px; }
   .timeline__label { display: none; }
+
+  /* ---- the footer, compacted ----
+     Measured at 390px it was 197px tall: 23% of the viewport, four wrapped
+     rows, and — because controls are put away with visibility rather than
+     display, so the canvas above never resizes — every one of those rows is
+     still reserved even in a reading that uses none of them. The height is
+     the cost of that rule, so the height is what has to come down.
+
+     FIND and SCHOOL share a row and split it; the buttons take the next. Two
+     rows instead of four. */
+  .controls { gap: 7px 10px; }
   .filter { margin-left: 0; }
+  #findWrap, #schoolWrap { flex: 1 1 44%; min-width: 0; }
+  #findWrap #search, #schoolWrap select { flex: 1 1 auto; width: auto; min-width: 0; }
+  .btns { flex: 1 1 100%; }
+  /* The placeholder overran its box by exactly one pixel — scrollWidth 129 in
+     a 128px field — so "TITLE OR ARTIST" rendered as "TITLE OR ARTIS". The
+     tracking is a stylistic flourish, not information; four hundredths of an
+     em off it buys six pixels and the word back. */
+  #search::placeholder { letter-spacing: .08em; }
+  /* The divider between the two control groups is a statement that they sit
+     side by side. Wrapped onto separate rows it stops being a divider and
+     becomes a stray tick floating to the left of CHROMATIC PLANE, which is
+     precisely a structural device decorating rather than encoding. */
+  .btns { margin-left: 0; padding-left: 0; border-left: none; }
   /* The list is anchored to the FIND control, right: 0, 330px wide. On a 360px
      viewport that control does not sit at the right edge — the row wraps — so
      those 330px ran off the left of the screen, and the year column, which is
@@ -772,4 +837,18 @@ button[aria-pressed="true"] {
 @media (prefers-reduced-motion: reduce) {
   .panel { animation: none; }
   .boot { transition: none; }
+}
+
+/* Opt-in only: nothing here changes anything for a visitor who has not asked
+   their OS for more contrast. The graduated dimness elsewhere in this file
+   ("lit only when pointed at") is the piece's own visual argument and is left
+   alone for everyone else — this is additional to it, not a replacement.
+   --line is what button/select/input borders are already built from (see
+   their rules above), so boosting it from ~1.3:1 to a real, visible border
+   is enough on its own — no selector list to keep in sync by hand. */
+@media (prefers-contrast: more) {
+  :root {
+    --line: #4a504c;
+    --text: #9aa39d;
+  }
 }

@@ -261,6 +261,62 @@ saliti nel menù delle letture (fase 5), RESET è diventato la riga di stato
 
 ---
 
+### Fase 11 — la prima volta che qualcuno la guarda ✅
+*2026-08-15. 116 test verdi (54 JS, 62 Python).*
+
+Installate due skill ufficiali Anthropic: **`frontend-design`** (direzione
+estetica) e **`webapp-testing`** (Playwright). La seconda toglie il limite
+dichiarato dieci fasi fa: **fino a oggi nulla era mai stato disegnato**. Undici
+schermate a 1440×900 e 390×844, più sonde sul DOM reale.
+
+Il risultato utile non è stato il giudizio estetico — la direzione regge — ma
+**cinque difetti che nessun test poteva vedere**, tre dei quali introdotti da me
+nelle fasi 9 e 10.
+
+- [x] **11.1 — `YEAR —` permanente nel footer** *(regressione mia, fase 10)*.
+      `views.js` rivendicava il blocco cursore per la vista FIELD e `applyView`
+      gira **dopo** `setMode` all'avvio: riaccendeva ciò che `setMode` aveva
+      appena spento. Risultato: una lineetta em-dash fissa nel corpo più grande
+      del footer — esattamente la "costante travestita da lettura" che la fase
+      10 diceva di aver eliminato. Il cursore non è un controllo e nessuna vista
+      lo possiede: dipende dal *modo*, non dal pannello. Tolto da `CONTROLS`.
+- [x] **11.2 — Il footer era una fascia vuota** in TABLES e COMPARE: 78px su
+      laptop, 197px su telefono, riservati al nulla (i controlli sono spenti con
+      `visibility`, quindi lo spazio resta). Ora quelle due letture rivendicano
+      la striscia — che **non è un controllo** ma un grafico: opere per anno con
+      la curva di chroma sopra, cioè il contesto dei numeri che le tabelle
+      classificano.
+- [x] **11.3 — Footer mobile da 197px a 136px** (−31%), quattro righe → tre.
+      FIND e SCHOOL condividono una riga.
+- [x] **11.4 — Il pannello TABLES copriva il menù** che lo apre: su 844px
+      partiva a y=76 mentre l'header finisce a 79. `--hud-h` è un *minimo*, non
+      un'altezza: la barra va a capo su schermo stretto e misura 87. Aggiunto
+      `measureHead()`, gemello di `measureFoot()`, che pubblica `--head-h`.
+- [x] **11.5 — Il divisore che decorava.** Su mobile le due colonne di
+      controlli vanno a capo e il filetto restava una stanghetta sospesa; nelle
+      letture a pannello divideva un gruppo invisibile dal solo `?`. Ora esiste
+      solo dove ci sono davvero due gruppi da dividere.
+- [x] **11.6 — Testo troncato**: il percentile andava a capo lasciando `TIME`
+      orfano sotto la barra, e il placeholder rendeva `TITLE OR ARTIS` — fuori
+      di **un pixel**. Il primo risolto togliendo "OF ITS TIME", che ripeteva
+      quello che la riga sotto già dice meglio; il secondo con 4 centesimi di em
+      di tracking.
+
+> **Il buco nei test, che è la lezione vera.** Un test sul cursore *esisteva
+> già* e passava: accendeva il timelapse, verificava che il blocco fosse vivo,
+> lo spegneva, verificava che sparisse. Entrambe le asserzioni passano
+> qualunque sia lo stato **iniziale** — ed è lì che viveva il bug. Due
+> meccanismi si contendevano l'elemento e vinceva quello che girava per ultimo
+> all'avvio; nessuno dei due capi di un interruttore può vederlo. Aggiunta
+> l'asserzione mancante e verificata rimettendo il bug.
+>
+> **Quarta infedeltà dello stub**: `document.body` non aveva `dataset`, quindi
+> pubblicare stato sul body — cosa ordinaria — faceva fallire l'avvio. Dopo
+> `hidden`, la cattura del puntatore e `textContent`, la regola resta quella:
+> quando un test si comporta in modo strano, sospettare lo stub prima dell'app.
+
+---
+
 ## Come provarlo in locale
 
 ```bash

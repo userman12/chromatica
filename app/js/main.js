@@ -55,7 +55,7 @@ const el = {
   natFilter: $("natFilter"),
   search: $("search"), searchCount: $("searchCount"), searchList: $("searchList"),
   btnTimelapse: $("btnTimelapse"), btnPlay: $("btnPlay"),
-  btnInfo: $("btnInfo"), foot: $("foot"), views: $("views"),
+  btnInfo: $("btnInfo"), foot: $("foot"), head: $("head"), views: $("views"),
   // The footer's control groups, as groups: a reading claims or releases each
   // of these whole rather than button by button. See views.js CONTROLS.
   cursor: $("cursor"), findWrap: $("findWrap"), schoolWrap: $("schoolWrap"),
@@ -114,6 +114,7 @@ const state = {
   cssW: 0, cssH: 0,
   tlW: 0, tlH: 0,
   footH: 0,           // the footer's real height, published to CSS as --foot-h
+  headH: 0,           // and the header's, as --head-h
   // Last values written to the DOM and to the strip. The field is redrawn every
   // frame because it moves; the panel is not. Writing four readout nodes and 600
   // bars on every frame cost more than all 32,350 particles did.
@@ -179,6 +180,20 @@ function measureFoot() {
   if (h === state.footH) return;
   state.footH = h;
   document.documentElement.style.setProperty("--foot-h", `${h}px`);
+}
+
+/* The header's real height, for the same reason and by the same means.
+ *
+ * `--hud-h` is a *minimum*, not a height: the top bar wraps to two rows on a
+ * narrow screen and measures 87px where the variable says 58. A panel pinned
+ * below the bar using the variable therefore began above it and covered the
+ * very menu that opens it. Measured, like everything else here that has to
+ * clear a bar whose height nobody can name in advance. */
+function measureHead() {
+  const h = Math.ceil(el.head.getBoundingClientRect().height);
+  if (h === state.headH) return;
+  state.headH = h;
+  document.documentElement.style.setProperty("--head-h", `${h}px`);
 }
 
 /* Nothing in these two bars may change width when its text changes. CHROMATIC
@@ -1404,6 +1419,7 @@ function bindInput() {
   el.btnInfo.addEventListener("click", () => {
     setView("field");
     el.about.hidden = false;
+    el.aboutClose.focus({ preventScroll: true });
   });
   // The panel keeps the method and hands the argument on: anyone who opened it
   // wanting to know what they are looking at should be walked, not read to.
@@ -1469,6 +1485,7 @@ function bindInput() {
      so one observer firing on both would be told about the same event twice and
      still have to measure each box on its own. */
   new ResizeObserver(measureFoot).observe(el.foot);
+  new ResizeObserver(measureHead).observe(el.head);
 }
 
 /* ---------- the opening ----------
@@ -1839,6 +1856,7 @@ function fillCompare() {
  */
 function setView(next, { fromURL = false } = {}) {
   const view = VIEWS[next] ? next : "field";
+  const previous = state.view;
   state.view = view;
 
   el.tables.hidden = view !== "tables";
@@ -1850,6 +1868,22 @@ function setView(next, { fromURL = false } = {}) {
     button.setAttribute("aria-pressed", String(button.dataset.view === view));
   }
   applyView(view, (id) => el[id] ?? null);
+  // Published so the stylesheet can reach view-dependent chrome that is not a
+  // control and so cannot be put away by claiming it — the divider between the
+  // two control groups being the one case: it is a statement that those groups
+  // sit side by side, and in a reading where neither is live it divides
+  // nothing from the one button that is.
+  document.body.dataset.view = view;
+
+  /* Only on the actual transition into a panel reading — pressing the button
+     for the view you are already in must not yank focus off whatever inside
+     it you have since tabbed to. Landing on "field" is the close side of the
+     transition and needs nothing: the panel that was open is now [hidden],
+     and a browser moves focus off a newly-hidden element on its own. */
+  if (previous !== view) {
+    const opened = { tables: el.tablesClose, story: el.storyClose, compare: el.compareClose }[view];
+    opened?.focus({ preventScroll: true });
+  }
 
   if (view === "tables") {
     hideDetail();
@@ -1978,7 +2012,15 @@ async function fillDetail(particle) {
   el.detailLink.textContent = `OPEN AT ${src.short} ↗`;
   paintEra(F.owner[particle]);
   paintKin(F.owner[particle]);
+  /* Focus follows the panel only on the transition into it — never on a
+     refresh while it is already open. This runs again every time you step to
+     a different particle (Enter through search matches, a sibling thumbnail,
+     the timelapse walking past), and stealing focus back to the close button
+     on every one of those would fight a keyboard user who has since moved
+     focus somewhere inside the panel on purpose. */
+  const wasHidden = el.detail.hidden;
   el.detail.hidden = false;
+  if (wasHidden) el.detailClose.focus({ preventScroll: true });
 }
 
 /* Where this work sits among the paintings of its own time.
@@ -2000,11 +2042,16 @@ function paintEra(index) {
 
   const line = (label, place, low, high) => {
     const percent = Math.round(place * 100);
-    // Said from whichever end is the shorter statement: "in the top 8%" beats
-    // "more colourful than 92%", and both are the same number.
+    /* Said from whichever end is the shorter statement: "in the top 8%" beats
+       "more colourful than 92%", and both are the same number.
+       "OF ITS TIME" used to close each of these and had to go: at the panel's
+       real width it pushed the sentence onto a second line and left the word
+       TIME stranded under the bar. It was also saying nothing the next line
+       does not say better — the basis under these two names the era outright,
+       with its span and how many works are in it. */
     const words = percent >= 50
-      ? `${high} THAN ${percent}% OF ITS TIME`
-      : `${low} THAN ${100 - percent}% OF ITS TIME`;
+      ? `${high} THAN ${percent}%`
+      : `${low} THAN ${100 - percent}%`;
     return `<div class="era__row"><span>${label}</span>`
       + `<u><i style="left:${clamp(place, 0, 1) * 100}%"></i></u>`
       + `<b>${words}</b></div>`;
@@ -2014,7 +2061,7 @@ function paintEra(index) {
     `<h3>THIS WORK IN ITS OWN TIME</h3>`
     + line("COLOUR", era.chroma, "MORE MUTED", "MORE COLOURFUL")
     + line("LIGHT", era.light, "DARKER", "LIGHTER")
-    + `<i class="era__basis">AGAINST ${num(era.works)} WORKS OF ${era.from}–${era.to}</i>`;
+    + `<i class="era__basis">OF THE ${num(era.works)} WORKS PAINTED ${era.from}–${era.to}</i>`;
   el.detailEra.hidden = false;
 }
 
@@ -2157,6 +2204,7 @@ async function compose(data) {
   fillCompare();
   measure();
   measureFoot();
+  measureHead();
   bindInput();
   setLayout(true);
   setMode("all");
