@@ -254,7 +254,7 @@ test("the scope line answers every one of its chips", async () => {
   assert.ok(scope.includes("rembrandt"), "the query must be named");
   assert.ok(scope.includes("CLEAR ALL"), "a narrowed view must offer to clear");
 
-  for (const chip of ["layout", "time", "nat", "query", "near", "copy", "all"]) {
+  for (const chip of ["layout", "time", "nat", "query", "near", "all"]) {
     assert.doesNotThrow(() => app.scope(chip), `chip "${chip}" threw`);
   }
   app.frame();

@@ -147,13 +147,12 @@ body { display: flex; flex-direction: column; }
 .scope__whole {
   font-size: 9px; letter-spacing: .1em; color: #575e59; white-space: nowrap;
 }
-.scope__clear, .scope__copy {
+.scope__clear {
   background: none; border: none; color: #4a504c;
   font-family: var(--mono); font-size: 9px; letter-spacing: .14em;
   padding: 3px 4px; min-width: 0; cursor: pointer;
 }
-.scope__clear:hover, .scope__copy:hover { color: var(--accent); border: none; }
-.scope__copy { font-size: 11px; }
+.scope__clear:hover { color: var(--accent); border: none; }
 
 /* ---------- the readings ----------
    One question, three answers, at the top and in the middle. Centred by giving
@@ -173,11 +172,9 @@ body { display: flex; flex-direction: column; }
 }
 
 .readout { display: flex; gap: 20px; margin: 0; }
-/* justify-content pushes each cell's number to the bottom of the row. The
-   cells stretch to the tallest, and with WORKS now set larger than the rest
-   the numbers would otherwise hang from their own tops at four different
-   heights. Aligned at the foot they share one line, which is what makes them
-   read as one readout rather than four labels. */
+/* justify-content pushes every cell's number to the bottom of the row, so all
+   four sit on one shared baseline rather than each hanging from its own top —
+   which is what makes them read as one readout rather than four labels. */
 .readout > div {
   display: flex; flex-direction: column; align-items: flex-end;
   justify-content: flex-end; gap: 2px;
@@ -186,14 +183,11 @@ body { display: flex; flex-direction: column; }
 .readout dt, .readout dd { white-space: nowrap; }
 /* Each dd is held at the width of its widest possible value (see lockWidths), so
    the text inside it has to be pinned to the right or the numbers would jitter
-   inside their own reserved box while you scrub. */
+   inside their own reserved box while you scrub.
+   All four are the same size on purpose: WORKS briefly ran larger than the
+   rest of the row, which claimed it mattered more than what it sits beside —
+   they are four readings of one instrument, not a headline and its footnotes. */
 .readout dd { margin: 0; color: var(--text-bright); font-size: 12px; font-weight: 500; text-align: right; }
-/* One of the four carries the weight. They were all set identically, which
-   said they were four equal facts — but COLOURS is roughly four and a half
-   times WORKS whatever you do, and SPAN and WINDOW qualify a number rather
-   than being one. Bigger, not brighter: the accent belongs to the field. */
-.readout--lead dd { font-size: 16px; line-height: 1.05; }
-.readout--lead dt { color: #5c635e; }
 
 /* Author and source: same weight as the readout, lit only when pointed at. */
 .credit { display: flex; align-items: center; gap: 3px; }
@@ -453,8 +447,18 @@ button {
   transition: color .12s linear, border-color .12s linear;
 }
 button:hover { color: var(--accent); border-color: var(--accent); }
-/* A mode that is on has to look on: this is the only latching control here. */
+/* A mode that is on has to look on: this is the only latching control here.
+   position + z-index because every segmented group in this file (the reading
+   menu, the two TABLES groupings) overlaps its buttons by 1px to fuse their
+   borders into one line, and in plain flow a later sibling paints over an
+   earlier one's shared edge. Left unlit, the pressed button's own border only
+   ever showed complete on whichever button happened to be last — COMPARE in
+   the reading menu, LIGHTNESS in the measure group — because nothing painted
+   after it to cover its far edge. Lifting the pressed button into its own
+   stacking layer means its full border wins on all four sides regardless of
+   where it sits among its neighbours. */
 button[aria-pressed="true"] {
+  position: relative; z-index: 1;
   color: var(--accent); border-color: var(--accent); background: #00ff9d0f;
 }
 

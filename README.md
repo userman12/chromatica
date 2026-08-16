@@ -68,8 +68,7 @@ each setting the field and saying one sentence about what you are looking at.
   click one to open the timelapse there.
 - **The scope line**, above the field, says what you have narrowed to and lets you
   lift any one narrowing by pressing it. It replaced RESET, which could undo a
-  state but could not teach one — and the ⧉ beside it copies a link to exactly
-  the view you are looking at. **?** opens the method notes.
+  state but could not teach one. **?** opens the method notes.
 
 ### Keyboard
 

@@ -1048,38 +1048,15 @@ function paintScope() {
     ? `<button class="scope__clear" data-scope="all" title="Back to the whole collection">CLEAR ALL</button>`
     : "";
 
-  el.scope.innerHTML = scope + whole + clear
-    + `<button class="scope__copy" data-scope="copy" title="Copy a link to exactly this view">⧉</button>`;
+  el.scope.innerHTML = scope + whole + clear;
 }
 
-/* The permalink was already complete and entirely invisible: every part of the
-   view has been in the URL for weeks — year, layout, school, query, and which
-   particle of which painting is open, named so it survives a rebuild of the
-   dataset — and nothing anywhere said so. One button is the whole fix. */
-async function copyView() {
-  writeURL();   // the URL is written on a trailing throttle; make it current first
-  const link = location.href;
-  const say = (text) => {
-    const button = el.scope.querySelector(".scope__copy");
-    if (!button) return;
-    button.textContent = text;
-    setTimeout(() => { state.scopeKey = null; paintScope(); }, 1400);
-  };
-  try {
-    await navigator.clipboard.writeText(link);
-    say("COPIED");
-  } catch {
-    // Clipboard access is refused on an insecure origin and in some embeddings.
-    // Selecting the text is the fallback that has always worked.
-    const box = document.createElement("input");
-    box.value = link;
-    document.body.appendChild(box);
-    box.select();
-    const ok = document.execCommand?.("copy");
-    box.remove();
-    say(ok ? "COPIED" : "⧉");
-  }
-}
+/* The copy-link button that used to sit here is gone: it read as one more
+   thing bolted onto the end of the line, and the permalink it exposed was
+   never the point — the URL already carries the view, silently, on every
+   change (see writeURL/syncURL). Sharing it is what the browser's own address
+   bar is for. Nothing about the sync itself changed; only the affordance that
+   announced it did. */
 
 function paintPlay() {
   el.btnPlay.textContent = state.playing ? "❚❚" : "▶";
@@ -1277,7 +1254,6 @@ function bindInput() {
       case "nat": setSchools(-1); hideDetail(); break;
       case "query": setQuery(""); break;
       case "near": clearNear(); break;
-      case "copy": copyView(); break;
       case "all":
         setSchools(-1);
         setQuery("");
