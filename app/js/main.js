@@ -129,9 +129,12 @@ const nebula = new Nebula(el.field);
 const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
 const num = (n) => n.toLocaleString("en-US");
 const span = (s, e) => (s === e ? String(s) : `${s}–${e}`);
+/* The one close glyph, as a line icon at the stroke every other mark here uses. */
+const X_ICON = '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" '
+  + 'stroke-width="1.5" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>';
 
 /* ---------- boot ---------- */
-const bootLines = ["CHROMATICA v0.3"];
+const bootLines = ["Chromatica"];
 const boot = (line) => {
   bootLines.push(line);
   el.bootLog.textContent = bootLines.join("\n");
@@ -222,18 +225,18 @@ function lockWidths() {
   };
   const F = state.field, works = state.data.paintings.length;
   const wholeSpan = span(F.y0, F.y1);
-  lock(el.btnLayout, ["CHROMATIC PLANE", "CHRONOLOGY"]);
-  lock(el.btnPlay, ["❚❚", "▶"]);
+  lock(el.btnLayout, ["Chromatic plane", "Chronology"]);
+  lock(el.btnPlay, ["Pause", "Play"]);
   lock(el.cursorValue, [String(F.y1)]);
   lock(el.statWorks, [num(works)]);
   lock(el.statColours, [num(F.n)]);
   lock(el.statSpan, [wholeSpan, "—"]);
-  lock(el.statWindow, ["ALL", "±999 YR"]);
-  lock(el.searchCount, [`${num(works)} OF ${num(works)} ↵`]);
+  lock(el.statWindow, ["All", "±999 yr"]);
+  lock(el.searchCount, [`${num(works)} of ${num(works)} ↵`]);
   // Both strings the strip's own label can take, since it sits beside a canvas
   // that takes the rest of the row.
-  lock(el.timelineLabel, ["DRAG TO SCRUB", "CLICK FOR TIMELAPSE"]
-    .map((a) => `BARS WORKS · LINE CHROMA · ${a}`));
+  lock(el.timelineLabel, ["drag to scrub", "click for timelapse"]
+    .map((a) => `Bars works · line chroma · ${a}`));
 }
 
 /* ---------- the loop ---------- */
@@ -319,7 +322,7 @@ function paintReadout() {
   put(el.statWorks, "works", num(s.works));
   put(el.statColours, "colours", num(s.colours));
   put(el.statSpan, "span", shown);
-  put(el.statWindow, "window", timed ? `±${Math.round(s.sigma)} YR` : "ALL");
+  put(el.statWindow, "window", timed ? `±${Math.round(s.sigma)} yr` : "All");
 
   /* Four readouts, three of them live at any moment — and never the same one
      twice or a constant dressed as a measurement.
@@ -354,8 +357,8 @@ function paintReadout() {
   put(el.searchCount, "matched",
     !asking() ? ""
       : state.matchAt >= 0 ? `${state.matchAt + 1}/${num(state.matchTotal)} ↵`
-        : state.near >= 0 ? `${num(s.matched)} NEAREST ↵`
-          : `${num(s.matched)} OF ${num(s.works)} ↵`);
+        : state.near >= 0 ? `${num(s.matched)} nearest ↵`
+          : `${num(s.matched)} of ${num(s.works)} ↵`);
 
   if (state.mode !== "time") return;
   const year = Math.round(state.cursor);
@@ -410,8 +413,8 @@ function drawTimeline() {
     if (!c) continue;
     const barH = Math.max(1, Math.round((Math.log1p(c) / Math.log1p(peak)) * (base - 1)));
     const lit = !timed || (year >= from && year <= to);
-    ctx.globalAlpha = timed ? (lit ? 0.85 : 0.3) : 0.5;
-    ctx.fillStyle = lit ? "#00ff9d" : "#2e3532";
+    ctx.globalAlpha = timed ? (lit ? 0.8 : 0.5) : 0.7;
+    ctx.fillStyle = timed && lit ? "#8b9dff" : "#3a3631";
     ctx.fillRect(Math.floor(xOf(year)), base - barH, Math.ceil(barW), barH);
   }
 
@@ -424,14 +427,14 @@ function drawTimeline() {
   const yOf = (c) => top + span * (1 - clamp((c - cLo) / (cHi - cLo), 0, 1));
   const marks = F.chromaMarks(state.nat);
 
-  /* Near-white, not the accent: the strip already spends green on the histogram
+  /* Near-white, not the accent: the strip already spends the accent on the timelapse window
      and on the timelapse handle, and a third hue in 26 px would be read as a
      third measurement. The axis is fixed (CHROMA_AXIS) rather than rescaled to
      whatever the current filter spans, so two schools looked at one after the
      other are directly comparable. */
   const strokeCurve = (nat) => {
     const { v, ok } = F.chromaCurve(nat);
-    for (const [width, colour, alpha] of [[3.2, "#0a0a0a", 1], [1.3, "#e8f5ef", 0.82]]) {
+    for (const [width, colour, alpha] of [[3.2, "#0f0e0d", 1], [1.3, "#ece6dc", 0.85]]) {
       ctx.globalAlpha = alpha;
       ctx.strokeStyle = colour;
       ctx.lineWidth = Math.max(1, width * dpr);
@@ -456,7 +459,7 @@ function drawTimeline() {
      — and then said none of it. These are the marks that do.
 
      In the curve's own near-white, never in the accent: the strip already spends
-     green on the histogram and on the timelapse handle, and a third green thing
+     green on the histogram and on the timelapse handle, and a third accent thing
      would read as a third measurement rather than as a label of the line it sits
      on. Ringed on a dark disc for the same reason the curve is stroked twice —
      over a lit bar of nearly its own weight, an unringed dot disappears.
@@ -471,12 +474,12 @@ function drawTimeline() {
     const r = (on ? 3.6 : 2.5) * dpr;
 
     ctx.globalAlpha = 1;
-    ctx.fillStyle = "#0a0a0a";
+    ctx.fillStyle = "#0f0e0d";
     ctx.beginPath();
     ctx.arc(px, py, r + 1.7 * dpr, 0, Math.PI * 2);
     ctx.fill();
 
-    ctx.strokeStyle = "#e8f5ef";
+    ctx.strokeStyle = "#ece6dc";
     ctx.lineWidth = Math.max(1, 1.2 * dpr);
     ctx.beginPath();
     ctx.arc(px, py, r, 0, Math.PI * 2);
@@ -484,7 +487,7 @@ function drawTimeline() {
 
     // Filled only under the pointer, so the one being read is the one named.
     if (on) {
-      ctx.fillStyle = "#e8f5ef";
+      ctx.fillStyle = "#ece6dc";
       ctx.beginPath();
       ctx.arc(px, py, r - 1.5 * dpr, 0, Math.PI * 2);
       ctx.fill();
@@ -493,10 +496,10 @@ function drawTimeline() {
 
   // baseline, and the handle only when there is a year to point at
   ctx.globalAlpha = 1;
-  ctx.fillStyle = "#1e2220";
+  ctx.fillStyle = "#2a2724";
   ctx.fillRect(0, base, w, Math.max(1, dpr));
   if (timed) {
-    ctx.fillStyle = "#00ff9d";
+    ctx.fillStyle = "#8b9dff";
     ctx.fillRect(Math.round(xOf(state.cursor)), 0, Math.max(1, dpr), h);
   }
 }
@@ -688,8 +691,8 @@ function setLayout(chrono) {
    that says which is which. It has to stay short: .timeline__label is nowrap
    and takes its width off the canvas. */
 function paintTimelineLabel() {
-  el.timelineLabel.textContent = "BARS WORKS · LINE CHROMA · "
-    + (state.mode === "time" ? "DRAG TO SCRUB" : "CLICK FOR TIMELAPSE");
+  el.timelineLabel.textContent = "Bars works · line chroma · "
+    + (state.mode === "time" ? "drag to scrub" : "click for timelapse");
 }
 
 /** Which school is on the field, or -1 for all of them. */
@@ -719,7 +722,7 @@ function setQuery(query) {
   // that named it disappearing from the scope line and nothing put in its place.
   if (state.near >= 0) {
     state.near = -1; state.nearInfo = null; paintNear();
-    if (query) note("THE COLOUR QUESTION WAS PUT AWAY — ONE AT A TIME");
+    if (query) note("The colour question was put away, one at a time");
   }
   state.field.setSearch(query);
   /* The box is only written when it does not already say this, *ignoring* the
@@ -754,7 +757,7 @@ function setNear(particle) {
   state.matchTotal = found.works;
   state.dirty = true;
   paintNear();
-  if (displaced) note(`“${displaced}” WAS PUT AWAY — ONE QUESTION AT A TIME`);
+  if (displaced) note(`“${displaced}” was put away, one question at a time`);
   syncURL();
 }
 
@@ -787,10 +790,10 @@ function paintNear() {
      say the same thing and read as one gesture. */
   const hex = state.selected >= 0 ? state.field.css[state.selected] : null;
   el.btnNear.innerHTML = running
-    ? "STOP · SHOWING COLOURS LIKE THIS"
+    ? "Stop showing colours like this"
     : hex
-      ? `<i style="background:${hex}"></i>FIND COLOURS LIKE ${hex.toUpperCase()}`
-      : "COLOURS LIKE THIS ONE";
+      ? `<i style="background:${hex}"></i>Find colours like ${hex.toUpperCase()}`
+      : "Colours like this one";
 }
 
 /** Is anything being asked of the field at all — by name, or by colour. */
@@ -838,8 +841,8 @@ function paintMatchList() {
      including on the way to reading one of its own answers. */
   const head = state.nearInfo
     ? `<li class="findlist__head"><i style="background:${state.nearInfo.hex}"></i>`
-      + `LIKE ${state.nearInfo.hex.toUpperCase()} · WITHIN ΔE ${state.nearInfo.worst.toFixed(1)}`
-      + `<button class="findlist__x" aria-label="Stop searching by colour">×</button></li>`
+      + `Like ${state.nearInfo.hex.toUpperCase()} · within ΔE ${state.nearInfo.worst.toFixed(1)}`
+      + `<button class="findlist__x" aria-label="Stop searching by colour">${X_ICON}</button></li>`
     : "";
   el.searchList.innerHTML = head + shown.map((i, k) => {
     const p = state.data.paintings[F.owner[i]];
@@ -860,14 +863,14 @@ function paintMatchList() {
        like a narrow one that had simply missed. Both halves are stated now,
        and the cap they share is named once rather than written twice. */
     + (list.length > shown.length
-      ? `<li class="findlist__more">${num(list.length - shown.length)} MORE`
-        + (list.length > MATCH_ROWS ? " · TOO MANY TO RING ON THE FIELD" : "")
-        + " — NARROW THE SEARCH</li>"
+      ? `<li class="findlist__more">${num(list.length - shown.length)} more`
+        + (list.length > MATCH_ROWS ? " · too many to ring on the field" : "")
+        + ", narrow the search</li>"
       : "")
     // Said rather than left as an empty box: the works exist, the filter on the
     // field is what is hiding them, and that is the actionable half of it.
     + (list.length ? ""
-      : `<li class="findlist__more">NONE OF THEM ARE IN VIEW</li>`);
+      : `<li class="findlist__more">None of them are in view</li>`);
   el.searchList.hidden = false;
 }
 
@@ -907,9 +910,9 @@ function paintCopy() {
   const timed = state.mode === "time";
   const F = state.field;
   el.axes.textContent = state.chrono
-    ? `HORIZONTAL · YEAR, ${F.y0} → ${F.y1}   ·   VERTICAL · LIGHTNESS L*, DARK BELOW`
-    : "HORIZONTAL · a*, GREEN → RED   ·   VERTICAL · b*, BLUE → YELLOW";
-  el.btnLayout.textContent = state.chrono ? "CHROMATIC PLANE" : "CHRONOLOGY";
+    ? `Across: year, ${F.y0} → ${F.y1}   ·   Up: lightness L*, dark below`
+    : "Across: a*, green → red   ·   Up: b*, blue → yellow";
+  el.btnLayout.textContent = state.chrono ? "Chromatic plane" : "Chronology";
   el.btnLayout.title = state.chrono
     ? "Restack the same colours by hue instead of by year"
     : "Spread the same colours along the years again";
@@ -917,8 +920,8 @@ function paintCopy() {
   // is carrying a note, this line is not paintCopy's to write.
   if (!state.hintSpent && !el.hint.classList.contains("is-note")) {
     el.hint.textContent = timed
-      ? "DRAG THE FIELD OR THE STRIP · ← → TO STEP A YEAR"
-      : "EVERY PARTICLE IS ONE MEASURED COLOUR OF ONE PAINTING";
+      ? "Drag the field or the strip · ← → to step a year"
+      : "Every particle is one measured colour of one painting";
   }
 }
 
@@ -978,8 +981,8 @@ function spendHint() {
  * is what the blurb was for. One element, four jobs, and it is never blank.
  */
 const SCOPE_LABEL = {
-  plane: "CHROMATIC PLANE",
-  chrono: "YEAR × LIGHTNESS",
+  plane: "Chromatic plane",
+  chrono: "Year × lightness",
 };
 
 /** The chips, as data. Rendered by paintScope, acted on by the click handler. */
@@ -998,10 +1001,10 @@ function scopeChips() {
 
   if (state.mode === "time") {
     const s = F.stats;
-    chips.push({ key: "time", text: `${span(s.from, s.to)} · MOVING WINDOW` });
+    chips.push({ key: "time", text: `${span(s.from, s.to)} · moving window` });
   }
   if (state.nat >= 0) {
-    chips.push({ key: "nat", text: (meta.nationalities[state.nat] || "?").toUpperCase() });
+    chips.push({ key: "nat", text: (meta.nationalities[state.nat] || "?") });
   }
   if (state.query) {
     chips.push({ key: "query", text: `“${state.query}” · ${num(F.stats.matched)}` });
@@ -1009,7 +1012,7 @@ function scopeChips() {
   if (state.near >= 0 && state.nearInfo) {
     chips.push({
       key: "near", swatch: state.nearInfo.hex,
-      text: `LIKE ${state.nearInfo.hex.toUpperCase()} · ${num(F.stats.matched)}`,
+      text: `Like ${state.nearInfo.hex.toUpperCase()} · ${num(F.stats.matched)}`,
     });
   }
   return chips;
@@ -1034,18 +1037,18 @@ function paintScope() {
     `<button class="scope__chip${chip.swap ? " scope__chip--swap" : ""}" data-scope="${chip.key}">`
     + (chip.swatch ? `<i style="background:${chip.swatch}"></i>` : "")
     + escapeHtml(chip.text)
-    + (chip.swap ? "" : chip.key === "layout" ? "" : "<b>×</b>")
+    + (chip.swap ? "" : chip.key === "layout" ? "" : `<b>${X_ICON}</b>`)
     + "</button>").join("");
 
   // With nothing narrowed the line says what the whole thing is. That sentence
   // used to be the blurb, and it is read off the data so it cannot go stale.
   const whole = narrowed() ? "" :
-    `<span class="scope__whole">${num(meta.totalPaintings)} PAINTINGS · `
-    + `${num(meta.totalCells)} MEASURED COLOURS · ${meta.yearRange[0]}–${meta.yearRange[1]}`
-    + ` · ${meta.sources.length} COLLECTIONS</span>`;
+    `<span class="scope__whole">${num(meta.totalPaintings)} paintings · `
+    + `${num(meta.totalCells)} measured colours · ${meta.yearRange[0]}–${meta.yearRange[1]}`
+    + ` · ${meta.sources.length} collections</span>`;
 
   const clear = narrowed()
-    ? `<button class="scope__clear" data-scope="all" title="Back to the whole collection">CLEAR ALL</button>`
+    ? `<button class="scope__clear" data-scope="all" title="Back to the whole collection">Clear all</button>`
     : "";
 
   el.scope.innerHTML = scope + whole + clear;
@@ -1059,7 +1062,7 @@ function paintScope() {
    announced it did. */
 
 function paintPlay() {
-  el.btnPlay.textContent = state.playing ? "❚❚" : "▶";
+  el.btnPlay.textContent = state.playing ? "Pause" : "Play";
   el.btnPlay.setAttribute("aria-label", state.playing ? "Pause" : "Play");
 }
 
@@ -1106,9 +1109,9 @@ function markAtTimeline(clientX) {
 }
 
 const MARK_TEXT = {
-  hi: "HIGHEST MEAN CHROMA",
-  lo: "LOWEST MEAN CHROMA",
-  end: "WHERE THE FIELD ENDS",
+  hi: "Highest mean chroma",
+  lo: "Lowest mean chroma",
+  end: "Where the field ends",
 };
 
 /** Name the mark under the pointer, or clear it.
@@ -1128,8 +1131,8 @@ function setTimelineMark(index, clientX) {
   const share = Math.round(mk.share * 100);
   el.markChip.innerHTML =
     `<b>${MARK_TEXT[mk.kind]} ${mk.v.toFixed(1)}</b>`
-    + `<i>AROUND ${mk.year} · SMOOTHED OVER ±${mk.sigma} YEARS</i>`
-    + (mk.kind === "hi" ? "" : `<i>${share}% OF THIS CURVE'S HIGHEST</i>`);
+    + `<i>Around ${mk.year} · smoothed over ±${mk.sigma} years</i>`
+    + (mk.kind === "hi" ? "" : `<i>${share}% of this curve's highest</i>`);
   el.markChip.hidden = false;
 
   // Kept inside the strip, measured rather than guessed from the text length.
@@ -1568,7 +1571,7 @@ function fillChip(hit, px, py) {
       `<b>${escapeHtml(p.t || "Untitled")}</b>`
       + `<i>${escapeHtml(p.a || "Unattributed")} · ${span(p.s, p.e)}</i><br>`
       + `<code>${F.css[hit].toUpperCase()}</code>`
-      + `<u>CLICK · THEN COLOURS LIKE THIS ONE</u>`;
+      + `<u>Click, then Colours like this one</u>`;
   }
   el.hoverchip.hidden = false;
   // Keep the chip inside the stage: measured, not guessed from the text length.
@@ -1607,7 +1610,7 @@ const TABLE_ROWS = 12;
 
 const MEASURE = {
   chroma: {
-    label: "CHROMA", high: "MOST COLOUR", low: "LEAST COLOUR",
+    label: "Chroma", high: "Most colour", low: "Least colour",
     // Not the group's own range: a bar has to be read against a fixed ruler or
     // two tables cannot be compared. This is CHROMA_AXIS, the same one the
     // strip under the field draws both curves against.
@@ -1616,7 +1619,7 @@ const MEASURE = {
       + "averaged over every measured colour of every work.",
   },
   light: {
-    label: "LIGHTNESS", high: "LIGHTEST", low: "DARKEST",
+    label: "Lightness", high: "Lightest", low: "Darkest",
     axis: [20, 70],
     note: "L*, where a colour sits between black and white, averaged over "
       + "every measured colour of every work.",
@@ -1624,9 +1627,9 @@ const MEASURE = {
 };
 
 const BY = {
-  artist: { label: "PAINTERS", floor: `AT LEAST ${RANK_MIN_WORKS} WORKS` },
-  school: { label: "SCHOOLS", floor: "" },
-  source: { label: "MUSEUMS", floor: "" },
+  artist: { label: "Painters", floor: `at least ${RANK_MIN_WORKS} works` },
+  school: { label: "Schools", floor: "" },
+  source: { label: "Museums", floor: "" },
 };
 
 function paintTables() {
@@ -1646,7 +1649,7 @@ function paintTables() {
     const inner =
       `<em>${place}</em>`
       + `<span class="tables__name">${escapeHtml(group.label)}`
-      + `<i>${num(group.works)} WORKS · ${span(group.from, group.to)}</i></span>`
+      + `<i>${num(group.works)} works · ${span(group.from, group.to)}</i></span>`
       + `<b>${value.toFixed(1)}</b>`
       + `<u style="width:${width.toFixed(1)}%"></u>`;
     return leadsBack
@@ -1732,7 +1735,7 @@ function setStep(index) {
   el.storyTitle.textContent = step.title;
   el.storyText.textContent = step.text;
   el.storyBack.disabled = index === 0;
-  el.storyNext.textContent = index === STEPS.length - 1 ? "EXPLORE →" : "NEXT →";
+  el.storyNext.textContent = index === STEPS.length - 1 ? "Explore →" : "Next →";
   el.storyDots.innerHTML = STEPS.map((_, i) =>
     `<button type="button" data-step="${i}" class="${i === index ? "is-at" : ""}" `
     + `aria-label="Step ${i + 1}"></button>`).join("");
@@ -1777,8 +1780,8 @@ function paintCompare() {
         + `<em>${group[key].toFixed(1)}`
         + `<s>${lead >= 0 ? "+" : "−"}${Math.abs(lead).toFixed(1)}</s></em></div>`;
     };
-    return `<p class="compare__count">${num(group.works)} WORKS · `
-      + `${span(group.from, group.to)}</p>` + bar("chroma", "COLOUR") + bar("light", "LIGHT");
+    return `<p class="compare__count">${num(group.works)} works · `
+      + `${span(group.from, group.to)}</p>` + bar("chroma", "Colour") + bar("light", "Light");
   };
 
   el.compareFiguresA.innerHTML = figures(a, b);
@@ -1876,7 +1879,7 @@ function setView(next, { fromURL = false } = {}) {
        and doing that in silence is the same fault as the two questions putting
        each other away without a word. Said, and only when there is something
        to lose. */
-    if (narrowed()) note("THE STORY TAKES THE FIELD — YOUR VIEW IS SET ASIDE");
+    if (narrowed()) note("The story takes the field, your view is set aside");
     // A link into a step sets the step itself; entering the story by pressing
     // it starts at the beginning.
     if (!fromURL) setStep(0);
@@ -1985,7 +1988,7 @@ async function fillDetail(particle) {
     `<li class="${h === thisHex ? "is-this" : ""}"><i style="background:${h}"></i>`
     + `<code>${h.toUpperCase()}</code></li>`).join("");
   el.detailLink.href = src.url.replace("{}", encodeURIComponent(p.i));
-  el.detailLink.textContent = `OPEN AT ${src.short} ↗`;
+  el.detailLink.textContent = `Open at ${src.name} ↗`;
   paintEra(F.owner[particle]);
   paintKin(F.owner[particle]);
   /* Focus follows the panel only on the transition into it — never on a
@@ -2026,18 +2029,18 @@ function paintEra(index) {
        does not say better — the basis under these two names the era outright,
        with its span and how many works are in it. */
     const words = percent >= 50
-      ? `${high} THAN ${percent}%`
-      : `${low} THAN ${100 - percent}%`;
+      ? `${high} than ${percent}%`
+      : `${low} than ${100 - percent}%`;
     return `<div class="era__row"><span>${label}</span>`
       + `<u><i style="left:${clamp(place, 0, 1) * 100}%"></i></u>`
       + `<b>${words}</b></div>`;
   };
 
   el.detailEra.innerHTML =
-    `<h3>THIS WORK IN ITS OWN TIME</h3>`
-    + line("COLOUR", era.chroma, "MORE MUTED", "MORE COLOURFUL")
-    + line("LIGHT", era.light, "DARKER", "LIGHTER")
-    + `<i class="era__basis">OF THE ${num(era.works)} WORKS PAINTED ${era.from}–${era.to}</i>`;
+    `<h3>This work in its own time</h3>`
+    + line("Colour", era.chroma, "More muted", "More colourful")
+    + line("Light", era.light, "Darker", "Lighter")
+    + `<i class="era__basis">Of the ${num(era.works)} works painted ${era.from}–${era.to}</i>`;
   el.detailEra.hidden = false;
 }
 
@@ -2061,7 +2064,7 @@ function paintKin(index) {
   const artist = state.data.paintings[index].a;
   const total = state.stats.groups("artist").find((g) => g.key === artist)?.works ?? 0;
   el.detailKinLabel.textContent =
-    `${num(total - 1)} MORE BY ${artist.toUpperCase()}`;
+    `${num(total - 1)} more by ${artist}`;
 
   const sources = state.data.meta.sources;
   el.detailKinList.innerHTML = kin.map((i) => {
@@ -2123,7 +2126,7 @@ function fillFilter(data) {
   const options = rows.map(([n, c]) =>
     `<option value="${n}">${escapeHtml(data.meta.nationalities[n] || "?")} (${c})</option>`)
     .join("");
-  el.natFilter.innerHTML = `<option value="-1">ALL</option>${options}`;
+  el.natFilter.innerHTML = `<option value="-1">All schools</option>${options}`;
 }
 
 async function init() {
@@ -2153,14 +2156,14 @@ async function init() {
   } catch (error) {
     // A half-drawn boot screen that never finishes reads as a hang, and a hang
     // gives no one anything to act on. Say what broke instead.
-    boot(`! ${error.message}`);
-    boot("! the field cannot be composed. try a hard reload.");
+    boot(`Error: ${error.message}`);
+    boot("The field cannot be composed. Try a hard reload.");
   }
 }
 
 async function compose(data) {
   state.data = data;
-  boot(`> ${num(data.meta.totalPaintings)} paintings / `
+  boot(`${num(data.meta.totalPaintings)} paintings, `
     + `${num(data.meta.totalCells)} extracted colours`);
 
   state.field = new Field(data);
@@ -2169,9 +2172,7 @@ async function compose(data) {
   // a second place for the conversion to drift.
   state.stats = new Stats(data, state.field);
   state.cursor = state.field.y0;
-  boot(`> ${num(state.field.n)} particles measured in CIE L*a*b*`);
-  boot("> layout: year × lightness");
-  boot(`> ${state.field.y0}–${state.field.y1} / whole span`);
+  boot(`${num(state.field.n)} particles measured in CIE L*a*b*`);
 
   el.timeline.setAttribute("aria-valuemin", state.field.y0);
   el.timeline.setAttribute("aria-valuemax", state.field.y1);
@@ -2190,7 +2191,7 @@ async function compose(data) {
   if (document.fonts?.ready) document.fonts.ready.then(lockWidths);
   applyURL();
 
-  boot("> composing ...");
+  boot("Composing the field");
   await new Promise((resolve) => setTimeout(resolve, 460));
   el.boot.classList.add("boot--done");
   requestAnimationFrame(frame);

@@ -17,7 +17,7 @@
  * Nothing here strokes, outlines, or tints a particle. The only accent-coloured
  * mark on the surface is the ring around a selected one.
  *
- * The one exception, and why: the ground is #0a0a0a, which is L* 2.7, and 1,862
+ * The one exception, and why: the ground is #0f0e0d, which is L* 4.2, and 1,862
  * of the 32,350 measured colours are below L* 10 — 473 of them below L* 5, four
  * of them literally #000000. Those are real measurements, mostly the grounds of
  * Caravaggio-descended painting and the burnt browns of old varnish, and they
@@ -41,8 +41,8 @@ import { ORDER_BAND } from "./field.js";
 
 // Beyond this many matching works the rings stop being marks and become noise.
 const MARK_CAP = 200;
-const ACCENT = "#00ff9d";
-const BG = "#0a0a0a";
+const ACCENT = "#8b9dff";   // ultramarine: the pigment the field barely holds
+const BG = "#0f0e0d";
 const GLOW_SCALE = 0.34;   // resolution of the blur bed
 const GLOW_SPREAD = 3.1;   // how much wider the bed's blobs are than the crisp ones
 const GLOW_ALPHA = 0.34;
@@ -84,19 +84,6 @@ export class Nebula {
     this.cloud = document.createElement("canvas");
     this.cloudCtx = this.cloud.getContext("2d", { alpha: false });
     this.dpr = 1;
-  }
-
-  /* The scan lines belong to the panel, not to the data: one 1-px line every 3 at
-     3.5% white, the same texture the surface had before, so the field reads as a
-     lit instrument rather than as a web page. It is uniform across the whole
-     canvas, so it cannot make one measured colour look different from another. */
-  buildScanlines() {
-    const tile = document.createElement("canvas");
-    tile.width = 1; tile.height = 3;
-    const c = tile.getContext("2d");
-    c.fillStyle = "#ffffff09";
-    c.fillRect(0, 0, 1, 1);
-    this.scan = this.ctx.createPattern(tile, "repeat");
   }
 
   /**
@@ -238,11 +225,6 @@ export class Nebula {
       ctx.fill();
     }
 
-    // --- panel texture ---
-    if (!this.scan) this.buildScanlines();
-    ctx.globalAlpha = 1;
-    ctx.fillStyle = this.scan;
-    ctx.fillRect(0, 0, this.cssW, this.cssH);
   }
 
   /**

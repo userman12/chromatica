@@ -3,9 +3,10 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>CHROMATICA — the colour of six centuries of painting</title>
+<title>Chromatica — the colour of six centuries of painting</title>
 <meta name="description" content="Every colour of 7,471 public-domain paintings from five open-access museum collections — the Met, the Art Institute of Chicago, Cleveland, the National Gallery of Art and the Rijksmuseum — from 1309 to 1910, placed by date and lightness or in the CIE L*a*b* chromatic plane.">
 <meta name="color-scheme" content="dark">
+<meta name="theme-color" content="#0f0e0d">
 
 <!-- The preview card. A crawler does not run JavaScript: X, Slack, LinkedIn and
      the rest fetch this head and draw whatever og:image points at, and the
@@ -26,7 +27,7 @@
 <meta property="og:image:alt" content="A dark field of thousands of coloured particles, each one a colour measured from a painting, spread left to right by year from 1309 to 1910 and bottom to top by lightness.">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:creator" content="@userluke_">
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' fill='%230a0a0a'/%3E%3Ccircle cx='6.5' cy='6' r='3.2' fill='%23c8873c'/%3E%3Ccircle cx='10' cy='10' r='2.6' fill='%235d7f86'/%3E%3C/svg%3E">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' fill='%230f0e0d'/%3E%3Ccircle cx='6.5' cy='6' r='3.2' fill='%23c8873c'/%3E%3Ccircle cx='10' cy='10' r='2.6' fill='%235d7f86'/%3E%3C/svg%3E">
 <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
@@ -35,7 +36,7 @@
      aria-hidden: it is decorative flavour text that disappears on its own in
      about a second, not a status a screen reader needs read aloud before the
      real page (whose content is unaffected by it) is reached. -->
-<div class="boot" id="boot" aria-hidden="true"><pre class="boot__log" id="bootLog">CHROMATICA v0.3</pre></div>
+<div class="boot" id="boot" aria-hidden="true"><pre class="boot__log" id="bootLog">Chromatica</pre></div>
 
 <header class="hud hud--top" id="head">
   <div class="hud__brand">
@@ -44,7 +45,7 @@
          Story) had nothing to nest under. Zero visual change — see
          .hud__title's added margin: 0 in the stylesheet, which cancels the
          browser's default h1 spacing so the fixed-height header cannot shift. -->
-    <h1 class="hud__title">CHROMATICA</h1>
+    <h1 class="hud__title">Chromatica</h1>
     <!-- One line where there used to be three.
          The two blurb lines and the sub-line were all permanent prose: they
          described the collection and the current layout, never changed unless
@@ -63,10 +64,10 @@
        are the four ways of reading the same measurements, and choosing one
        recomposes the footer so that only its own controls are live. -->
   <nav class="views" id="views" aria-label="Reading">
-    <button data-view="field" aria-pressed="true">FIELD</button>
-    <button data-view="tables" aria-pressed="false">TABLES</button>
-    <button data-view="story" aria-pressed="false">STORY</button>
-    <button data-view="compare" aria-pressed="false">COMPARE</button>
+    <button data-view="field" aria-pressed="true">Field</button>
+    <button data-view="tables" aria-pressed="false">Tables</button>
+    <button data-view="story" aria-pressed="false">Story</button>
+    <button data-view="compare" aria-pressed="false">Compare</button>
   </nav>
 
   <div class="hud__right">
@@ -78,10 +79,10 @@
        than what it sits beside; they are four readings of one instrument and
        read as one row now. -->
   <dl class="readout">
-    <div><dt>WORKS</dt><dd id="statWorks">—</dd></div>
-    <div><dt>COLOURS</dt><dd id="statColours">—</dd></div>
-    <div id="statSpanCell"><dt>SPAN</dt><dd id="statSpan">—</dd></div>
-    <div id="statWindowCell"><dt>WINDOW</dt><dd id="statWindow">—</dd></div>
+    <div><dt>Works</dt><dd id="statWorks">—</dd></div>
+    <div><dt>Colours</dt><dd id="statColours">—</dd></div>
+    <div id="statSpanCell"><dt>Span</dt><dd id="statSpan">—</dd></div>
+    <div id="statWindowCell"><dt>Window</dt><dd id="statWindow">—</dd></div>
   </dl>
   <!-- Author and source, at the same weight as the readout beside them. -->
   <nav class="credit" aria-label="Author and source">
@@ -100,8 +101,8 @@
 <main class="stage" id="stage">
   <canvas id="field"></canvas>
   <div class="hoverchip" id="hoverchip" hidden></div>
-  <p class="stage__axes" id="axes">HORIZONTAL · YEAR   ·   VERTICAL · LIGHTNESS L*, DARK BELOW</p>
-  <p class="stage__hint" id="hint">EVERY PARTICLE IS ONE MEASURED COLOUR OF ONE PAINTING</p>
+  <p class="stage__axes" id="axes">Across: year   ·   Up: lightness L*, dark below</p>
+  <p class="stage__hint" id="hint">Every particle is one measured colour of one painting</p>
 
   <!-- The argument, walked. Anchored over the field rather than in a panel of
        its own, because the whole point is that the field recomposes underneath
@@ -113,14 +114,14 @@
        access to by treating this as the sole focus. Sighted mouse users can
        still reach the field underneath; nothing about that changes. -->
   <aside class="story" id="story" role="dialog" aria-modal="true" aria-labelledby="storyTitle" hidden>
-    <button class="story__close" id="storyClose" aria-label="Leave the story">×</button>
+    <button class="story__close" id="storyClose" aria-label="Leave the story"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
     <p class="story__count" id="storyCount"></p>
     <h2 class="story__title" id="storyTitle"></h2>
     <p class="story__text" id="storyText"></p>
     <div class="story__nav">
-      <button id="storyBack">← BACK</button>
+      <button id="storyBack">← Back</button>
       <div class="story__dots" id="storyDots"></div>
-      <button id="storyNext">NEXT →</button>
+      <button id="storyNext">Next →</button>
     </div>
   </aside>
 </main>
@@ -136,7 +137,7 @@
          live thing, the year under the scrubber, which earns its size because
          it changes sixty times a second while you drag. -->
     <div class="cursor is-vacant" id="cursor">
-      <span class="cursor__label">YEAR</span>
+      <span class="cursor__label">Year</span>
       <span class="cursor__year" id="cursorValue">—</span>
     </div>
 
@@ -144,9 +145,9 @@
          change how it is drawn, because they are different kinds of act: one
          narrows the collection, the other re-reads it. -->
     <div class="filter filter--find" id="findWrap">
-      <label class="filter__label" for="search">FIND</label>
+      <label class="filter__label" for="search">Find</label>
       <input id="search" type="search" autocomplete="off" spellcheck="false"
-             placeholder="TITLE OR ARTIST" aria-describedby="searchCount"
+             placeholder="Title or artist" aria-describedby="searchCount"
              title="Type to dim everything else. Enter steps through the matches, shift+Enter goes back.">
       <span class="filter__count" id="searchCount" role="status"></span>
       <!-- What answered, by name. The rings say where the matches are; this says
@@ -155,8 +156,8 @@
     </div>
 
     <div class="filter filter--school" id="schoolWrap">
-      <label class="filter__label" for="natFilter">SCHOOL</label>
-      <select id="natFilter"><option value="-1">ALL</option></select>
+      <label class="filter__label" for="natFilter">School</label>
+      <select id="natFilter"><option value="-1">All schools</option></select>
     </div>
 
     <!-- What is left here is the field's own controls, and only those.
@@ -166,17 +167,17 @@
          other ways of reading it. What remains changes how the field is drawn,
          which is what a control under a picture should do. -->
     <div class="btns">
-      <button id="btnLayout" title="Restack the same colours by hue instead of by year">CHROMATIC PLANE</button>
+      <button id="btnLayout" title="Restack the same colours by hue instead of by year">Chromatic plane</button>
       <span class="btns__pair" id="timelapseWrap">
-        <button id="btnTimelapse" aria-pressed="false" title="Move a window through time instead of showing the whole span">TIMELAPSE</button>
-        <button id="btnPlay" class="is-vacant" title="Play or pause the timelapse">❚❚</button>
+        <button id="btnTimelapse" aria-pressed="false" title="Move a window through time instead of showing the whole span">Timelapse</button>
+        <button id="btnPlay" class="is-vacant" title="Play or pause the timelapse">Pause</button>
       </span>
-      <button id="btnInfo" title="How the colours were measured" aria-label="About and method">?</button>
+      <button id="btnInfo" title="How the colours were measured" aria-label="About and method">About</button>
     </div>
   </div>
 
   <div class="timeline" id="timelineWrap">
-    <span class="timeline__label" id="timelineLabel">BARS WORKS · LINE CHROMA · CLICK FOR TIMELAPSE</span>
+    <span class="timeline__label" id="timelineLabel">Bars works · line chroma · click for timelapse</span>
     <!-- Overwritten from the dataset at boot (see compose()); these are the
          values a screen reader would read in the frames before the module has
          run, so they say the real span rather than a stale one. -->
@@ -187,18 +188,18 @@
 </footer>
 
 <aside class="panel panel--detail" id="detail" role="dialog" aria-modal="true" aria-labelledby="detailTitle" hidden>
-  <button class="panel__close" id="detailClose" aria-label="Close">×</button>
+  <button class="panel__close" id="detailClose" aria-label="Close"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
   <div class="panel__body">
     <figure class="panel__figure"><img id="detailImg" alt="" decoding="async"></figure>
     <div class="panel__meta">
-      <span class="panel__eyebrow">SOURCE OF THIS PARTICLE</span>
+      <span class="panel__eyebrow">Source of this particle</span>
       <h2 id="detailTitle"></h2>
       <p class="panel__artist" id="detailArtist"></p>
       <ul class="swatches" id="detailSwatches"></ul>
       <!-- Directly under the swatches, because it acts on the one marked among
            them: the colour you clicked, asked of the whole collection. -->
       <button class="panel__near" id="btnNear" aria-pressed="false"
-              title="Rank every other painting by how near its closest measured colour comes to the marked one, in CIE L*a*b*. Press again to stop.">COLOURS LIKE THIS ONE</button>
+              title="Rank every other painting by how near its closest measured colour comes to the marked one, in CIE L*a*b*. Press again to stop.">Colours like this one</button>
       <!-- Where this work sits among the paintings of its own time. "Chroma
            14.2" is a number nobody has a feel for; "more muted than 71% of
            what was painted around it" is the same measurement as a statement,
@@ -206,13 +207,13 @@
            entirely when the era is too thin to quote — see stats.era. -->
       <div class="era" id="detailEra" hidden></div>
       <dl class="panel__rows">
-        <div><dt>DATED</dt><dd id="detailYear"></dd></div>
-        <div><dt>SCHOOL</dt><dd id="detailNat"></dd></div>
-        <div><dt>HELD BY</dt><dd id="detailSource"></dd></div>
-        <div><dt>CATALOGUE ID</dt><dd id="detailId"></dd></div>
-        <div><dt>PALETTE</dt><dd id="detailPalette"></dd></div>
+        <div><dt>Dated</dt><dd id="detailYear"></dd></div>
+        <div><dt>School</dt><dd id="detailNat"></dd></div>
+        <div><dt>Held by</dt><dd id="detailSource"></dd></div>
+        <div><dt>Catalogue</dt><dd id="detailId"></dd></div>
+        <div><dt>Palette</dt><dd id="detailPalette"></dd></div>
       </dl>
-      <a id="detailLink" href="#" target="_blank" rel="noopener">OPEN IN THE CATALOGUE ↗</a>
+      <a id="detailLink" href="#" target="_blank" rel="noopener">Open in the catalogue ↗</a>
       <!-- The other works by the same hand. Possible only since the five
            catalogues' spellings were folded into one name per painter: before
            that Rembrandt was three artists and this would have shown a third
@@ -232,24 +233,24 @@
      school, a museum — and ranked. It is also the way in for someone who does
      not yet know what to look for, which the field alone never offered. -->
 <aside class="panel panel--tables" id="tables" role="dialog" aria-modal="true" aria-labelledby="tablesTitle" hidden>
-  <button class="panel__close" id="tablesClose" aria-label="Close">×</button>
+  <button class="panel__close" id="tablesClose" aria-label="Close"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
   <div class="tables__body">
-    <h2 id="tablesTitle">WHAT THE MEASUREMENTS ADD UP TO</h2>
+    <h2 id="tablesTitle">What the measurements add up to</h2>
     <div class="tables__controls">
       <div class="seg" id="tableBy" role="group" aria-label="Group by">
-        <button data-by="artist" aria-pressed="true">PAINTERS</button>
-        <button data-by="school" aria-pressed="false">SCHOOLS</button>
-        <button data-by="source" aria-pressed="false">MUSEUMS</button>
+        <button data-by="artist" aria-pressed="true">Painters</button>
+        <button data-by="school" aria-pressed="false">Schools</button>
+        <button data-by="source" aria-pressed="false">Museums</button>
       </div>
       <div class="seg" id="tableMeasure" role="group" aria-label="Measure">
-        <button data-measure="chroma" aria-pressed="true">CHROMA</button>
-        <button data-measure="light" aria-pressed="false">LIGHTNESS</button>
+        <button data-measure="chroma" aria-pressed="true">Chroma</button>
+        <button data-measure="light" aria-pressed="false">Lightness</button>
       </div>
     </div>
     <p class="tables__note" id="tablesNote"></p>
     <div class="tables__pair">
-      <section><h3 id="tablesHighLabel">HIGHEST</h3><ol id="tableHigh"></ol></section>
-      <section><h3 id="tablesLowLabel">LOWEST</h3><ol id="tableLow"></ol></section>
+      <section><h3 id="tablesHighLabel">Highest</h3><ol id="tableHigh"></ol></section>
+      <section><h3 id="tablesLowLabel">Lowest</h3><ol id="tableLow"></ol></section>
     </div>
   </div>
 </aside>
@@ -270,9 +271,9 @@
      rescaled per filter, so neither side can look saturated merely by being
      the more colourful of the two. -->
 <aside class="panel panel--compare" id="compare" role="dialog" aria-modal="true" aria-labelledby="compareTitle" hidden>
-  <button class="panel__close" id="compareClose" aria-label="Close">×</button>
+  <button class="panel__close" id="compareClose" aria-label="Close"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
   <div class="compare__body">
-    <h2 id="compareTitle">TWO SCHOOLS, ONE RULER</h2>
+    <h2 id="compareTitle">Two schools, one ruler</h2>
     <p class="compare__note" id="compareNote"></p>
     <div class="compare__pair">
       <section>
@@ -289,19 +290,19 @@
 </aside>
 
 <aside class="panel panel--about" id="about" role="dialog" aria-modal="true" aria-labelledby="aboutTitle" hidden>
-  <button class="panel__close" id="aboutClose" aria-label="Close">×</button>
+  <button class="panel__close" id="aboutClose" aria-label="Close"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
   <div class="about__body">
-    <h2 id="aboutTitle">CHROMATICA</h2>
+    <h2 id="aboutTitle">Chromatica</h2>
     <p id="aboutSource"></p>
     <p>Every particle is one real colour, taken by k-means clustering from the
       photograph of one real painting. Nothing here is decorative: no colour was
       chosen, corrected or invented.
-      <button class="about__story" id="aboutStory">WALK THROUGH WHAT IT SHOWS →</button></p>
+      <button class="about__story" id="aboutStory">Walk through what it shows →</button></p>
 
-    <h3>HOW THE COLOURS WERE MEASURED</h3>
+    <h3>How the colours were measured</h3>
     <ul id="aboutMethod"></ul>
 
-    <h3>SOURCES</h3>
+    <h3>Sources</h3>
     <p>Images and metadata come from the open-access programmes of these
       collections, all of them CC0 or public domain. Attribution is on every
       work: click a particle to see the painting it was measured from and the

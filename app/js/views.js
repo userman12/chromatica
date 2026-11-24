@@ -28,7 +28,7 @@
 
 export const VIEWS = {
   field: {
-    label: "FIELD",
+    label: "Field",
     title: "Every measured colour, placed by date and lightness or by hue",
     /* The field's own controls: they change how it is drawn, which is what a
        control under a picture should do. The scrub position is not among them
@@ -36,7 +36,7 @@ export const VIEWS = {
     controls: ["find", "school", "layout", "timelapse", "timeline"],
   },
   tables: {
-    label: "TABLES",
+    label: "Tables",
     title: "Rank painters, schools and museums by the same measurements",
     /* None of the field's *controls*. The tables are read, not steered — and
        the field is still behind them, so leaving a search box live over a
@@ -48,7 +48,7 @@ export const VIEWS = {
     controls: ["timeline"],
   },
   compare: {
-    label: "COMPARE",
+    label: "Compare",
     title: "Two schools side by side, measured against one fixed scale",
     /* Its two selects are its own, inside the panel. The field's school filter
        would be a third answer to a question the panel is already asking.
@@ -56,7 +56,7 @@ export const VIEWS = {
     controls: ["timeline"],
   },
   story: {
-    label: "STORY",
+    label: "Story",
     title: "Seven steps through what the field is showing",
     /* The story drives the field itself, so its controls are inert on purpose:
        changing school halfway through a step would leave the sentence on

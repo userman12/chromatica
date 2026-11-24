@@ -27,7 +27,7 @@
    a view someone could have arrived at and can hand on. */
 export const STEPS = [
   {
-    title: "EVERY DOT IS A MEASUREMENT",
+    title: "Every dot is a measurement",
     text: "Seven thousand paintings, reduced to the colours they are actually "
       + "made of. Each particle is one colour, taken by k-means from the "
       + "photograph of one real work in five open-access collections. Nothing "
@@ -36,7 +36,7 @@ export const STEPS = [
     state: { mode: "all", chrono: true, nat: -1, query: "" },
   },
   {
-    title: "COLOUR PEAKS EARLY",
+    title: "Colour peaks early",
     text: "The most saturated painting in six centuries is the earliest. "
       + "Around 1339 the mean chroma of the collection reaches 27 — gold "
       + "ground, vermilion, ultramarine ground from lapis, laid on in flat "
@@ -45,7 +45,7 @@ export const STEPS = [
     state: { mode: "time", year: 1339, chrono: true, nat: -1, query: "" },
   },
   {
-    title: "THEN IT GOES OUT",
+    title: "Then it goes out",
     text: "By the 1670s the same measurement has fallen to 15, its lowest in "
       + "the whole span, and the field has sunk down the lightness axis with "
       + "it. This is the century of the dark ground: the canvas primed brown "
@@ -54,7 +54,7 @@ export const STEPS = [
     state: { mode: "time", year: 1672, chrono: true, nat: -1, query: "" },
   },
   {
-    title: "THE DUTCH ARE THE FLOOR",
+    title: "The Dutch are the floor",
     text: "Of the twelve schools here the Dutch are the most muted, and it is "
       + "not close. Their palette is the Baroque argument in one tradition — "
       + "and this is the corner of the field the Rijksmuseum was added to "
@@ -63,7 +63,7 @@ export const STEPS = [
     state: { mode: "all", chrono: true, natName: "Dutch", query: "" },
   },
   {
-    title: "AND IT ONLY HALF COMES BACK",
+    title: "And it only half comes back",
     text: "The nineteenth century recovers, and stops well short: 17 at the "
       + "end of the span, about two thirds of the medieval figure. What does "
       + "return in full is light — the field climbs back up the vertical axis "
@@ -71,7 +71,7 @@ export const STEPS = [
     state: { mode: "time", year: 1890, chrono: true, nat: -1, query: "" },
   },
   {
-    title: "THE SAME COLOURS, READ BY HUE",
+    title: "The same colours, read by hue",
     text: "Nothing is refiltered here and nothing is recomputed: the same "
       + "particles walk to a second pair of axes. This is the CIE L*a*b* "
       + "plane itself, so neutrals fall in the middle and saturated colours "
@@ -80,7 +80,7 @@ export const STEPS = [
     state: { mode: "all", chrono: false, nat: -1, query: "" },
   },
   {
-    title: "IT STOPS AT 1910",
+    title: "It stops at 1910",
     text: "The field ends rather than fades. That is a copyright boundary and "
       + "not an aesthetic one: works after about 1910 are almost never in the "
       + "public domain, so the twentieth century cannot be shown here "

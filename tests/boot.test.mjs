@@ -203,7 +203,7 @@ test("the app boots and reads its dataset", async () => {
 test("a frame can be drawn", async () => {
   const app = await boot();
   app.frame();
-  assert.match(app.text("axes"), /HORIZONTAL/);
+  assert.match(app.text("axes"), /Across/);
 });
 
 test("every control survives being used", async () => {
@@ -250,16 +250,16 @@ test("the scope line answers every one of its chips", async () => {
   app.frame();   // the scope line is painted by the loop, not by the setters
 
   const scope = app.text("scope");
-  assert.ok(scope.includes("MOVING WINDOW"), "the year window must be named");
+  assert.ok(scope.includes("moving window"), "the year window must be named");
   assert.ok(scope.includes("rembrandt"), "the query must be named");
-  assert.ok(scope.includes("CLEAR ALL"), "a narrowed view must offer to clear");
+  assert.ok(scope.includes("Clear all"), "a narrowed view must offer to clear");
 
   for (const chip of ["layout", "time", "nat", "query", "near", "all"]) {
     assert.doesNotThrow(() => app.scope(chip), `chip "${chip}" threw`);
   }
   app.frame();
   // Everything lifted: the line goes back to stating the size of the whole.
-  assert.ok(app.text("scope").includes("PAINTINGS"),
+  assert.ok(app.text("scope").includes("paintings"),
     "with nothing narrowed the line should state the collection");
 });
 
@@ -269,7 +269,7 @@ test("the tables open, switch, and lead back into the field", async () => {
   assert.equal(app.byId.get("tables").hidden, false, "the panel should open");
 
   const high = app.text("tableHigh");
-  assert.ok(high.includes("WORKS"), "rows should state how many works they rest on");
+  assert.ok(high.includes("works"), "rows should state how many works they rest on");
   assert.ok(high.includes("data-key"), "painter rows should lead somewhere");
 
   // Switching measure and grouping must not throw and must rewrite the tables.
@@ -315,13 +315,13 @@ test("the detail panel places a work and offers its siblings", async () => {
 
   const era = app.byId.get("detailEra");
   assert.equal(era.hidden, false, "a 19th-century work has a thick enough era to quote");
-  assert.match(era.innerHTML, /THAN \d+%/, "the placement should be said in words");
-  assert.match(era.innerHTML, /OF THE [\d,]+ WORKS PAINTED \d{4}–\d{4}/,
+  assert.match(era.innerHTML, /than \d+%/, "the placement should be said in words");
+  assert.match(era.innerHTML, /Of the [\d,]+ works painted \d{4}–\d{4}/,
     "the era should state what it was measured against");
 
   const kin = app.byId.get("detailKin");
   assert.equal(kin.hidden, false, "Monet should have siblings");
-  assert.match(app.text("detailKinLabel"), /MORE BY/);
+  assert.match(app.text("detailKinLabel"), /more by/);
   assert.match(app.byId.get("detailKinList").innerHTML, /data-kin="\d+"/,
     "sibling thumbnails should be pressable");
 
@@ -349,7 +349,7 @@ test("the story walks, and every step really moves the field", async () => {
   for (let i = 0; ; i++) {
     app.frame();
     seen.add(app.text("scope"));
-    if (app.text("storyNext").startsWith("EXPLORE")) break;
+    if (app.text("storyNext").startsWith("Explore")) break;
     app.click("storyNext");
     assert.ok(i < 20, "the story should end");
   }
@@ -357,7 +357,7 @@ test("the story walks, and every step really moves the field", async () => {
     `the field should be in a different state at different steps, saw ${seen.size}`);
 
   // One of the steps narrows to a school; the field should say so.
-  assert.ok([...seen].some((s) => s.includes("DUTCH")),
+  assert.ok([...seen].some((s) => s.includes("Dutch")),
     "the school step should actually narrow the field");
 
   // The last step leaves you in the field rather than looping or congratulating.
@@ -401,7 +401,7 @@ test("a reading recomposes the footer and leaves the field where it was", async 
   assert.ok(!vacant("timelineWrap"), "the strip stays: several steps are about it");
   // And it legitimately discards what you had narrowed to -- setting the field
   // is what a step *is* -- so it says so rather than doing it in silence.
-  assert.match(app.text("hint"), /TAKES THE FIELD/,
+  assert.match(app.text("hint"), /takes the field/,
     "losing the view to the story should be announced");
 });
 
@@ -411,8 +411,8 @@ test("compare puts two schools against one ruler and says what it found", async 
   assert.equal(app.byId.get("compare").hidden, false);
 
   const a = app.text("compareFiguresA");
-  assert.match(a, /WORKS/, "each side should say how many works it rests on");
-  assert.match(a, /COLOUR/, "each side should show chroma");
+  assert.match(a, /works/, "each side should say how many works it rests on");
+  assert.match(a, /Colour/, "each side should show chroma");
   // The mark showing where the *other* school falls is the whole mechanism by
   // which two columns become one comparison.
   assert.match(a, /class="compare__bar"/);
@@ -505,8 +505,8 @@ test("the readout never shows a constant, and never says a thing twice", async (
   app.frame();
   assert.ok(!vacant("statWindowCell"), "WINDOW is a reading inside the timelapse");
   assert.ok(vacant("statSpanCell"), "SPAN is duplicated by the scope line inside it");
-  assert.match(app.text("statWindow"), /^±\d+ YR$/);
-  assert.ok(app.text("scope").includes("MOVING WINDOW"),
+  assert.match(app.text("statWindow"), /^±\d+ yr$/);
+  assert.ok(app.text("scope").includes("moving window"),
     "the scope line is the one carrying the years now");
 
   // The same rule one row down, in the footer. The scrub position is a reading
@@ -534,7 +534,7 @@ test("the field demonstrates itself once, then lets go", async () => {
   assert.equal(chip.hidden, false, "the field should point at something once");
   // It must be the real chip, not a mimed one: same content pointing produces.
   assert.match(chip.innerHTML, /#[0-9A-F]{6}/i, "it should name the measured colour");
-  assert.match(chip.innerHTML, /COLOURS LIKE THIS ONE/,
+  assert.match(chip.innerHTML, /Colours like this one/,
     "and carry the same offer a pointed-at chip carries");
 
   // Any interaction at all ends it -- not just one on the field.
